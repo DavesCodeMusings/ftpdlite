@@ -33,3 +33,4 @@ FTPdLite is a total alpha-quality product at the moment. It lacks several import
 * But in readonly mode, it works with tnftp on Raspberry Pi OS. Woohoo!
 * It currently does not play well with FileZilla. Not sure why. It's on the to-do list.
 * It does not support PORT mode transfers that Windows command-line FTP expects. But, that's more of a Windows problem.
+* MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
