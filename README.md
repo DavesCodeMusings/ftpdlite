@@ -30,6 +30,6 @@ Boot your microcontroller and point your FTP client to port 21.
 ## Caveats
 FTPdLite is a total alpha-quality product at the moment. It lacks several important features.
 * It works with tnftp on Raspberry Pi OS. Woohoo!
-* It currently lacks the TYPE command and does not play well with FileZilla. It's on the to-do list.
+* It currently does not play well with FileZilla. Not sure why. It's on the to-do list.
 * It does not support PORT mode transfers that Windows command-line FTP expects. But, that's a Windows problem.
 * It does not support STOR and RETR, so no upload and dowload yet. Kind of a key feature. Coming soon, as they say!
