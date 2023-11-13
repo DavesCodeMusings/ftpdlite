@@ -32,4 +32,4 @@ FTPdLite is a total alpha-quality product at the moment. It lacks several import
 * It works with tnftp on Raspberry Pi OS. Woohoo!
 * It currently does not play well with FileZilla. Not sure why. It's on the to-do list.
 * It does not support PORT mode transfers that Windows command-line FTP expects. But, that's a Windows problem.
-* It does not support STOR and RETR, so no upload and dowload yet. Kind of a key feature. Coming soon, as they say!
+* It does not support STOR, so no upload yet. Coming soon, as they say!
