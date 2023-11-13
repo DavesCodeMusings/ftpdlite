@@ -66,7 +66,7 @@ class FTPdLite:
         return port
 
     """
-    Given a line of inpput, split the command into a verb and parameter.
+    Given a line of input, split the command into a verb and parameter.
     """
     def parse_request(self, req_buffer):
         request = req_buffer.decode("utf-8").rstrip("\r\n")
