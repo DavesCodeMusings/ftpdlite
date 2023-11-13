@@ -29,7 +29,11 @@ class FTPdLite:
             "RMD": self.rmd,
             "SYST": self.syst,
             "TYPE": self.type,
-            "USER": self.user
+            "USER": self.user,
+            "XCWD": self.cwd,
+            "XMKD": self.mkd,
+            "XPWD": self.pwd,
+            "XRMD": self.rmd
         }
 
     """
