@@ -1,7 +1,7 @@
 ### File systems in flight. FTPdLite! ###
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 from asyncio import get_event_loop, sleep_ms, start_server
-from os import chdir, getcwd, listdir, mkdir, rmdir, stat
+from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat
 from time import localtime, mktime, time
 
 class FTPdLite:
@@ -15,6 +15,7 @@ class FTPdLite:
         self.pasv_port_pool = list(range(49152, 49407))
         self.command_dictionary = {
             "CWD": self.cwd,
+            "DELE": self.dele,
             "FEAT": self.feat,
             "HELP": self.help,
             "LIST": self.list,
@@ -107,15 +108,29 @@ class FTPdLite:
     """
     Change working directory.
     """
-    async def cwd(self, dir, writer):
-        if dir.startswith("/") is False:
-            dir = getcwd() + "/" + dir
+    async def cwd(self, dirpath, writer):
+        if dirpath.startswith("/") is False:
+            dirpath = getcwd() + "/" + dirpath
         try:
-            chdir(dir)
+            chdir(dirpath)
         except OSError:
             await self.send_response(550, "No such directory.", writer)
         else:
             await self.send_response(250, getcwd(), writer)
+        return True
+
+    """
+    Given a path, delete the file.
+    """
+    async def dele(self, filepath, writer):
+        if filepath.startswith("/") is False:
+            filepath = getcwd() + "/" + filepath
+        try:
+            remove(filepath)
+        except OSError:
+            await self.send_response(550, "No such file.", writer)
+        else:
+            await self.send_response(250, "OK.", writer)
         return True
 
     """
@@ -128,7 +143,7 @@ class FTPdLite:
     """
     Reply with help only in a general sense, not per individual command.
     """
-    async def help(self, topic, writer):
+    async def help(self, _, writer):
         await self.send_response(211, "[FTPdLite](https://github.com/DavesCodeMusings/ftpdlite)", writer)
         return True
 
@@ -136,20 +151,20 @@ class FTPdLite:
     Send a Linux style directory listing, though ownership and permission
     has no meaning in the flash filesystem.
     """
-    async def list(self, dir, writer):
+    async def list(self, dirpath, writer):
         await sleep_ms(500)  # kluge to wait for data connection to be ready
-        if dir is None:
-            dir = getcwd()
-        elif dir.startswith("/") is False:
-            dir = getcwd() + "/" + dir
+        if dirpath is None:
+            dirpath = getcwd()
+        elif dirpath.startswith("/") is False:
+            dirpath = getcwd() + "/" + dirpath
         try:
-            dir_entries = listdir(dir)
+            dir_entries = listdir(dirpath)
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await self.send_response(150, dir, writer)
+            await self.send_response(150, dirpath, writer)
             for entry in dir_entries:
-                properties = stat(dir + "/" + entry)
+                properties = stat(dirpath + "/" + entry)
                 if properties[0] & 0x4000:  # entry is a directory
                     type = 'd'
                     size = 0
@@ -177,18 +192,18 @@ class FTPdLite:
     """
     Send a list of file names only, without the extra information.
     """
-    async def nlst(self, dir, writer):
+    async def nlst(self, dirpath, writer):
         await sleep_ms(1000)  # kluge to wait for data connection to be ready
-        if dir is None:
-            dir = getcwd()
-        elif dir.startswith("/") is False:
-            dir = getcwd() + "/" + dir
+        if dirpath is None:
+            dirpath = getcwd()
+        elif dirpath.startswith("/") is False:
+            dirpath = getcwd() + "/" + dirpath
         try:
-            dir_entries = listdir(dir)
+            dir_entries = listdir(dirpath)
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await self.send_response(150, dir, writer)
+            await self.send_response(150, dirpath, writer)
             print("\n".join(dir_entries))
             self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
             await self.data_writer.drain()
@@ -206,12 +221,12 @@ class FTPdLite:
     """
     Given a path, create a new directory.
     """
-    async def mkd(self, dir, writer):
-        if dir.startswith("/") is False:
-            dir = getcwd() + "/" + dir
+    async def mkd(self, dirpath, writer):
+        if dirpath.startswith("/") is False:
+            dirpath = getcwd() + "/" + dirpath
         try:
-            mkdir(dir)
-            await self.send_response(250, f"\"{dir}\"", writer)
+            mkdir(dirpath)
+            await self.send_response(250, f"\"{dirpath}\"", writer)
         except OSError:
             await self.send_response(550, "Failed to create directory.", writer)
         return True
@@ -226,8 +241,8 @@ class FTPdLite:
     """
     Reply to the common case of UTF-8, but nothing else.
     """
-    async def opts(self, string, writer):
-        if string.upper() == "UTF8 ON":
+    async def opts(self, option, writer):
+        if option.upper() == "UTF8 ON":
             await self.send_response(200, "Always in UTF8 mode.", writer)
         else:
             await self.send_response("504 Unknown option.", writer)
@@ -265,7 +280,7 @@ class FTPdLite:
         return True
 
     """
-    Report back with the present working directory.
+    Report back with the current working directory.
     """
     async def pwd(self, _, writer):
         await self.send_response(257, f"\"{getcwd()}\"", writer)
@@ -281,11 +296,11 @@ class FTPdLite:
     """
     Given a directory path, remove the directory. Must be empty.
     """
-    async def rmd(self, dir, writer):
-        if dir.startswith("/") is False:
-            dir = getcwd() + "/" + dir
+    async def rmd(self, dirpath, writer):
+        if dirpath.startswith("/") is False:
+            dirpath = getcwd() + "/" + dirpath
         try:
-            rmdir(dir)
+            rmdir(dirpath)
         except OSError:
             await self.send_response(550, "No such directory.", writer)
         else:
