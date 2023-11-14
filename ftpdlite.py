@@ -1,4 +1,5 @@
 ### File systems in flight. FTPdLite! ###
+
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 
 from asyncio import get_event_loop, sleep_ms, start_server
@@ -11,12 +12,17 @@ class FTPdLite:
     A minimalist FTP server for MicroPython.
     """
 
-    def __init__(self, readonly=False, request_buffer_size=1024):
+    def __init__(
+        self,
+        readonly=False,
+        pasv_port_range=range(49152, 49407),
+        request_buffer_size=1024,
+    ):
         self.server_name = "FTPdLite (MicroPython)"
         self.credentials = "Felicia:Friday"
         self.readonly = readonly
         self.request_buffer_size = request_buffer_size
-        self.pasv_port_pool = list(range(49152, 49407))
+        self.pasv_port_pool = list(pasv_port_range)
         self.command_dictionary = {
             "CWD": self.cwd,
             "FEAT": self.feat,
@@ -65,6 +71,12 @@ class FTPdLite:
         """
         Turn seconds past the epoch into a human readable date/time to be
         used in Unix-style directory listings.
+
+        Args:
+            timestamp (integer): number of seconds past the Python epoch
+
+        Returns:
+            string: date and time suitable for `ls -l` output.
         """
         months = [
             "Jan",
@@ -104,6 +116,13 @@ class FTPdLite:
     def decode_path(path, empty_means_cwd=False):
         """
         Given a file or directory path, validate it and return an absolute path.
+
+        Args:
+            path (string): a relative, absolute, or empty path to a resource
+            empty_means_cwd (boolean): flag to use CWD in place of empty path
+
+        Returns:
+            string: an absolute path to the resource
         """
         if path is None or path == "" and empty_means_cwd is True:
             absolute_path = getcwd()
@@ -116,7 +135,13 @@ class FTPdLite:
     @staticmethod
     def path_join(*args):
         """
-        There's no os.path.join in MicroPython, so...
+        There's no os.path.join available in MicroPython, so...
+
+        Args:
+            *args (string): a variable number of path components
+
+        Returns:
+            string: the resulting absolute path
         """
         path_result = ""
         for path_component in args:
@@ -140,7 +165,7 @@ class FTPdLite:
             bytes: a chunk of the file until the file ends, then nothing
         """
         while True:
-            chunk = file.read(64)  # small chunks to avoid out of memory errors
+            chunk = file.read(512)  # small chunks to avoid out of memory errors
             if chunk:
                 yield chunk
             else:  # empty chunk means end of the file
@@ -150,6 +175,9 @@ class FTPdLite:
         """
         Get a TCP port number from the pool, then rotate the list to ensure
         it won't be used again for a while. Helps avoid address in use error.
+
+        Returns:
+            integer: TCP port number
         """
         port = self.pasv_port_pool.pop(0)
         self.pasv_port_pool.append(port)
@@ -158,6 +186,12 @@ class FTPdLite:
     def parse_request(self, req_buffer):
         """
         Given a line of input, split the command into a verb and parameter.
+
+        Args:
+            req_buffer (bytes): the unprocessed request from the client
+
+        Returns:
+            verb, param (tuple): action and related parameter string
         """
         request = req_buffer.decode("utf-8").rstrip("\r\n")
         if len(request) == 0:
@@ -180,10 +214,19 @@ class FTPdLite:
     async def send_response(self, code, msg, writer):
         """
         Given a status code and a message, send a response to the client.
+
+        Args:
+            code (integer): a three digit status code
+            msg (string or list): a single-line (string) or multi-line (list)
+                human readable message describing the result
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            nothing
         """
         if code == 250 and msg is None:
             msg = "OK."
-        elif isinstance(msg, str):   # single line
+        elif isinstance(msg, str):  # single line
             print(f"{code} {msg}")
             writer.write(f"{code} {msg}\r\n")
         elif isinstance(msg, list):  # multi-line, dashes after code
@@ -200,6 +243,13 @@ class FTPdLite:
     async def cwd(self, dirpath, writer):
         """
         Change working directory.
+
+        Args:
+            dirpath (string): a path indicating a directory resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         dirpath = FTPdLite.decode_path(dirpath)
         try:
@@ -213,6 +263,13 @@ class FTPdLite:
     async def dele(self, filepath, writer):
         """
         Given a path, delete the file.
+
+        Args:
+            filepath (string): a path indicating a file resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         filepath = FTPdLite.decode_path(filepath)
         try:
@@ -226,6 +283,13 @@ class FTPdLite:
     async def feat(self, _, writer):
         """
         No features are supported, but reply to satify clients that ask.
+
+        Args:
+            _ (discard): does not take parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         await self.send_response(211, "", writer)  # No features.
         return True
@@ -233,6 +297,13 @@ class FTPdLite:
     async def help(self, _, writer):
         """
         Reply with help only in a general sense, not per individual command.
+
+        Args:
+            _ (discard): this server does not support specific topics
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         await self.send_response(
             211, "[FTPdLite](https://github.com/DavesCodeMusings/ftpdlite)", writer
@@ -243,6 +314,13 @@ class FTPdLite:
         """
         Send a Linux style directory listing, though ownership and permission
         has no meaning in the flash filesystem.
+
+        Args:
+            dirpath (string): a path indicating a directory resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
         try:
@@ -285,6 +363,13 @@ class FTPdLite:
     async def mkd(self, dirpath, writer):
         """
         Given a path, create a new directory.
+
+        Args:
+            dirpath (string): a path indicating the directory resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         dirpath = FTPdLite.decode_path(dirpath)
         try:
@@ -297,6 +382,13 @@ class FTPdLite:
     async def nlst(self, dirpath, writer):
         """
         Send a list of file names only, without the extra information.
+
+        Args:
+            dirpath (string): a path indicating a directory resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         await sleep_ms(1000)  # kluge to wait for data connection to be ready
         dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
@@ -323,6 +415,13 @@ class FTPdLite:
     async def noop(self, _, writer):
         """
         Do nothing. Used by some clients to stop the connection from timing out.
+
+        Args:
+            _ (discard): command does not take parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         await self.send_response(200, "Take your time. I'll wait.", writer)
         return True
@@ -330,6 +429,13 @@ class FTPdLite:
     async def no_permission(self, _, writer):
         """
         Return an error. Used when the server is in readonly mode.
+
+        Args:
+            _ (discard): throw away parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         await self.send_response(550, "No access.", writer)
         return True
@@ -337,6 +443,13 @@ class FTPdLite:
     async def opts(self, option, writer):
         """
         Reply to the common case of UTF-8, but nothing else.
+
+        Args:
+            option (string): the option and its value
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         if option.upper() == "UTF8 ON":
             await self.send_response(200, "Always in UTF8 mode.", writer)
@@ -347,6 +460,13 @@ class FTPdLite:
     async def passwd(self, password, writer):
         """
         Verify user credentials and drop the connection if incorrect.
+
+        Args:
+            password (string): the cleartext password
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: True if login succeeded, False if not
         """
         if self.debug:
             print("Expecting:", self.credentials)
@@ -365,6 +485,13 @@ class FTPdLite:
         """
         Start a new data listener on one of the high numbered ports and
         report back to the client.
+
+        Args:
+            _ (discard): command does not take parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         host_octets = self.host.replace(".", ",")
         port = self.get_pasv_port()
@@ -385,13 +512,27 @@ class FTPdLite:
     async def pwd(self, _, writer):
         """
         Report back with the current working directory.
+
+        Args:
+            _ (discard): command does not take parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always True
         """
         await self.send_response(257, f'"{getcwd()}"', writer)
         return True
 
     async def quit(self, _, writer):
         """
-        User sign off. Returning False signals to exit the control channel loop.
+        User sign off. Returning False signals exit by the control channel loop.
+
+        Args:
+            _ (discard): command does not take parameters
+            writer (stream): the FTP client's control connection
+
+        Return:
+            boolean: always False
         """
         await self.send_response(221, f"Bye, {self.username}.", writer)
         return False
@@ -400,6 +541,13 @@ class FTPdLite:
         """
         Given a file path, retrieve the file from flash ram and send it to
         the client over the data connection established by PASV.
+
+        Args:
+            file (string): a path indicating the file resource
+            writer (stream): the FTP client's control connection
+
+        Returns:
+            boolean: always True
         """
         filepath = FTPdLite.decode_path(filepath)
         try:
@@ -447,6 +595,11 @@ class FTPdLite:
         return True
 
     async def site(self, param, writer):
+        """
+        RFC959 specifies SITE as a way to access services not defined
+        in the common set of FTP commands. This server offers the Unix-
+        style `df` command as a way to show file system utilization.
+        """
         if param.lower() == "df":
             properties = statvfs("/")
             fragment_size = properties[1]
@@ -458,7 +611,7 @@ class FTPdLite:
             percent_used = round(100 * used_kb / size_kb)
             df_output = [
                 "Filesystem      Size      Used     Avail   Use%",
-                f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%"
+                f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%",
             ]
             await self.send_response(211, df_output, writer)
         else:
@@ -466,6 +619,10 @@ class FTPdLite:
         return True
 
     async def stor(self, filepath, writer):
+        """
+        Given a file path, open a data connection and write the incoming
+        stream data to the file.
+        """
         filepath = FTPdLite.decode_path(filepath)
         await sleep_ms(500)  # kluge to wait for data connection to be ready
         try:
@@ -477,7 +634,7 @@ class FTPdLite:
             try:
                 with open(filepath, "wb") as file:
                     while True:
-                        chunk = await self.data_reader.read(64)
+                        chunk = await self.data_reader.read(512)
                         if chunk:
                             file.write(chunk)
                         else:
@@ -505,7 +662,8 @@ class FTPdLite:
 
     async def type(self, type, writer):
         """
-        TYPE is implemented to satisfy some clients, but doesn't actually do anything.
+        TYPE is implemented to satisfy some clients, but doesn't actually
+        do anything to change the translation of end-of-line characters.
         """
         if type.upper() in ("A", "A N", "I", "L 8"):
             await self.send_response(200, "Always in binary mode.", writer)
