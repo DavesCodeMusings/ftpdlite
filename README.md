@@ -12,7 +12,7 @@ You shouldn't really. FTP is an I.T. security professional's worst nightmare. Th
 ## How can I use it?
 First, read up on how insecure FTP is. Then, if you still want to do it...
 
-Download ftpdlite.py and put it in your device's /lib directory. Then run FTPdLite from main.py like the example shown below. You'll also need a boot.py to get your device on the network.
+Download ftpdlite.py and put it in your MicroPython device's /lib directory. Then run FTPdLite from main.py like the example shown below. You'll also need a boot.py to get your device on the network.
 
 main.py
 ```
