@@ -64,4 +64,4 @@ flash          6144K     3392K     2752K    55%
 QUIT
 221 Bye, Felicia.
 ```
-_Figure 2: Console logging with debug off_
+_Figure 2: Four hundred some odd lines of code committed just to sneak in Bye, Felicia_
