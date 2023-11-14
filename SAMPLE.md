@@ -10,8 +10,6 @@ Password:
 230 Login successful.
 Remote system type is UNIX.
 Using binary mode to transfer files.
-ftp> put 'Rick Astley - Never Gonna Give You Up.mp3'
-usage: put local-file [remote-file]
 ftp> put Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 local: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 remote: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 227 Entering passive mode =192,168,10,57,192,2
