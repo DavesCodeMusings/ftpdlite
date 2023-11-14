@@ -28,6 +28,7 @@ ftp> site df
 ftp> quit
 221 Bye, Felicia.
 ```
+_Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll._
 
 ## FTPdLite serial console output
 ```
@@ -63,3 +64,4 @@ flash          6144K     3392K     2752K    55%
 QUIT
 221 Bye, Felicia.
 ```
+_Figure 2: Console logging with debug off_
