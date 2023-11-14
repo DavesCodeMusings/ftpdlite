@@ -77,4 +77,4 @@ RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 QUIT
 221 Bye, Felicia.
 ```
-_Figure 2: Five hundred some odd lines of code committed just to sneak in Bye, Felicia_
+_Figure 2: Six hundred some odd lines of code committed just to sneak in Bye, Felicia_
