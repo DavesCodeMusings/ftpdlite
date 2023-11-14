@@ -1,7 +1,7 @@
 # Sample Session
 Tested by transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) From a Raspberry Pi to an ESP32-S3. The upload was successful, but took about twice as long to transfer as it would to play the song. Download is even slower. But, no errors and no stalls.
 
-## tnftp client
+## tnftp Client on Raspberry Pi 4
 ```
 220 FTPdLite (MicroPython)
 Name (192.168.10.57:pi): Felicia
@@ -30,7 +30,7 @@ ftp> quit
 ```
 _Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll._
 
-## FTPdLite serial console output
+## FTPdLite Serial Console on ESP32-S3
 ```
 220 FTPdLite (MicroPython)
 USER Felicia
