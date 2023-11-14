@@ -27,6 +27,10 @@ Change the server.credentials to something that makes sense to you. Default cred
 
 Boot your microcontroller and point your FTP client to port 21.
 
+```
+wget --ftp-user=Felicia --ftp-password=Friday ftp://192.168.1.100//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+```
+
 ### MIP Install
 MicroPython's mpremote provides a handy way to download the library as well.
 
