@@ -14,6 +14,7 @@ class FTPdLite:
     def __init__(self, readonly=False, request_buffer_size=1024):
         self.server_name = "FTPdLite (MicroPython)"
         self.credentials = "Felicia:Friday"
+        self.readonly = readonly
         self.request_buffer_size = request_buffer_size
         self.pasv_port_pool = list(range(49152, 49407))
         self.command_dictionary = {
@@ -249,10 +250,14 @@ class FTPdLite:
                 else:
                     type = "-"
                     size = properties[6]
+                if self.readonly is True:
+                    permissions = "r--r--r--"
+                else:
+                    permissions = "rw-rw-rw-"
                 uid = "root" if properties[4] == 0 else properties[4]
                 gid = "root" if properties[5] == 0 else properties[5]
                 mtime = FTPdLite.date_format(properties[8])
-                formatted_entry = f"{type}rw-rw-rw-  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
+                formatted_entry = f"{type}{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
                 print(formatted_entry)
                 self.data_writer.write(formatted_entry + "\r\n")
             await self.data_writer.drain()
