@@ -37,6 +37,7 @@ class FTPdLite:
             "QUIT": self.quit,
             "RETR": self.retr,
             "SITE": self.site,
+            "SIZE": self.size,
             "SYST": self.syst,
             "TYPE": self.type,
             "USER": self.user,
@@ -231,9 +232,9 @@ class FTPdLite:
             writer.write(f"{code} {msg}\r\n")
         elif isinstance(msg, list):  # multi-line, dashes after code
             for line in range(len(msg) - 1):
-                print(msg[line])
+                print(f"{code}-{msg[line]}")
                 writer.write(f"{code}-{msg[line]}\r\n")
-            print(msg[-1])
+            print(f"{code} {msg[-1]}")
             writer.write(f"{code} {msg[-1]}\r\n")  # last line, no dash
         await writer.drain()
 
@@ -282,7 +283,7 @@ class FTPdLite:
 
     async def feat(self, _, writer):
         """
-        No features are supported, but reply to satify clients that ask.
+        Reply with multi-line list of extra capabilities. RFC-2389
 
         Args:
             _ (discard): does not take parameters
@@ -291,7 +292,12 @@ class FTPdLite:
         Return:
             boolean: always True
         """
-        await self.send_response(211, "", writer)  # No features.
+        features = [
+            "Extensions supported:",
+            "SIZE",
+            "END"
+        ]
+        await self.send_response(211, features, writer)
         return True
 
     async def help(self, _, writer):
@@ -390,7 +396,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await sleep_ms(1000)  # kluge to wait for data connection to be ready
+        await sleep_ms(500)  # kluge to wait for data connection to be ready
         dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
@@ -442,7 +448,7 @@ class FTPdLite:
 
     async def opts(self, option, writer):
         """
-        Reply to the common case of UTF-8, but nothing else.
+        Reply to the common case of UTF-8, but nothing else. RFC-2389
 
         Args:
             option (string): the option and its value
@@ -454,7 +460,7 @@ class FTPdLite:
         if option.upper() == "UTF8 ON":
             await self.send_response(200, "Always in UTF8 mode.", writer)
         else:
-            await self.send_response(504, "Unknown option.", writer)
+            await self.send_response(501, "Unknown option.", writer)
         return True
 
     async def passwd(self, password, writer):
@@ -616,6 +622,20 @@ class FTPdLite:
             await self.send_response(211, df_output, writer)
         else:
             await self.send_response(504, "Parameter not supported.", writer)
+        return True
+
+    async def size(self, filepath, writer):
+        """
+        Given a file path, reply with the number of bytes in the file.
+        Defined in RFC-3659.
+        """
+        filepath = FTPdLite.decode_path(filepath)
+        try:
+            size = stat(filepath)[6]
+        except OSError:
+            await self.send_response(550, "No such file.", writer)
+        else:
+            await self.send_response(213, f"{size}", writer)
         return True
 
     async def stor(self, filepath, writer):
