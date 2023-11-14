@@ -1,5 +1,5 @@
 # Sample Session
-Tested by transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) From a Raspberry Pi to an ESP32-S3. The upload was successful, but took about twice as long to transfer as it would to play the song. Download is even slower. But, no errors and no stalls.
+Tested by transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) From a Raspberry Pi to an ESP32-S3. The upload was successful, but took about twice as long to transfer as it would to play the song. Download is even slower at 08:20 (6.64 KiB/s). But, no errors and no stalls.
 
 ## tnftp Client on Raspberry Pi 2B
 ```
