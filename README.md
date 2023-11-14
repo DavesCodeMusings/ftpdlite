@@ -1,4 +1,4 @@
-# ftpdlite
+# FTPdLite
 _File systems in flight! FTPdLite!_
 
 **FTPdLite is a work in progress. See Caveats below to adjust your expectations.**
