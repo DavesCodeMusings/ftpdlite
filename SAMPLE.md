@@ -30,7 +30,7 @@ ftp> quit
 ```
 _Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll._
 
-## FTPdLite Serial Console on ESP32-S3
+## FTPdLite Log Output on ESP32-S3 Serial Console
 ```
 220 FTPdLite (MicroPython)
 USER Felicia
