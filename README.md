@@ -27,6 +27,13 @@ Change the server.credentials to something that makes sense to you. Default cred
 
 Boot your microcontroller and point your FTP client to port 21.
 
+### MIP Install
+MicroPython's mpremote provides a handy way to download the library as well.
+
+```
+py -m mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
+```
+
 ## Caveats
 FTPdLite is a total alpha-quality product at the moment. It lacks several important features.
 * It currently does not play well with FileZilla. Not sure why. It's on the to-do list.
