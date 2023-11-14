@@ -2,7 +2,7 @@
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 
 from asyncio import get_event_loop, sleep_ms, start_server
-from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat
+from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 
 
@@ -30,6 +30,7 @@ class FTPdLite:
             "PWD": self.pwd,
             "QUIT": self.quit,
             "RETR": self.retr,
+            "SITE": self.site,
             "SYST": self.syst,
             "TYPE": self.type,
             "USER": self.user,
@@ -42,6 +43,7 @@ class FTPdLite:
                     "DELE": self.no_permission,
                     "MKD": self.no_permission,
                     "RMD": self.no_permission,
+                    "STOR": self.no_permission,
                     "XMKD": self.no_permission,
                     "XRMD": self.no_permission,
                 }
@@ -52,6 +54,7 @@ class FTPdLite:
                     "DELE": self.dele,
                     "MKD": self.mkd,
                     "RMD": self.rmd,
+                    "STOR": self.stor,
                     "XMKD": self.mkd,
                     "XRMD": self.rmd,
                 }
@@ -180,8 +183,15 @@ class FTPdLite:
         """
         if code == 250 and msg is None:
             msg = "OK."
-        print(f"{code} {msg}")
-        writer.write(f"{code} {msg}\r\n")
+        elif isinstance(msg, str):   # single line
+            print(f"{code} {msg}")
+            writer.write(f"{code} {msg}\r\n")
+        elif isinstance(msg, list):  # multi-line, dashes after code
+            for line in range(len(msg) - 1):
+                print(msg[line])
+                writer.write(f"{code}-{msg[line]}\r\n")
+            print(msg[-1])
+            writer.write(f"{code} {msg[-1]}\r\n")  # last line, no dash
         await writer.drain()
 
     # Each command function below returns a boolean to indicate if session
@@ -261,9 +271,7 @@ class FTPdLite:
                 print(formatted_entry)
                 self.data_writer.write(formatted_entry + "\r\n")
             await self.data_writer.drain()
-            await self.send_response(
-                226, "Directory list sent. Closing data connection.", writer
-            )
+            await self.send_response(226, "Directory list sent.", writer)
             self.data_writer.close()
             await self.data_writer.wait_closed()
             del self.data_writer
@@ -301,9 +309,7 @@ class FTPdLite:
             print("\n".join(dir_entries))
             self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
             await self.data_writer.drain()
-            await self.send_response(
-                226, "Directory list sent. Closing data connection.", writer
-            )
+            await self.send_response(226, "Directory list sent.", writer)
             self.data_writer.close()
             await self.data_writer.wait_closed()
             del self.data_writer
@@ -403,7 +409,7 @@ class FTPdLite:
         else:
             await sleep_ms(500)  # kluge to wait for data connection to be ready
             try:
-                self.data_writer
+                self.data_writer  # should exist when data connection is active
             except NameError:
                 await self.send_response(425, "Data connection failed.", writer)
             else:
@@ -417,14 +423,14 @@ class FTPdLite:
                     await self.send_response(451, "Error reading file.", writer)
                 else:
                     await self.send_response(226, "Transfer finished.", writer)
-            self.data_writer.close()
-            await self.data_writer.wait_closed()
-            del self.data_writer
-            self.data_reader.close()
-            await self.data_reader.wait_closed()
-            del self.data_reader
-            if self.debug:
-                print("Data connection closed.")
+                self.data_writer.close()
+                await self.data_writer.wait_closed()
+                del self.data_writer
+                self.data_reader.close()
+                await self.data_reader.wait_closed()
+                del self.data_reader
+                if self.debug:
+                    print("Data connection closed.")
         return True
 
     async def rmd(self, dirpath, writer):
@@ -440,6 +446,56 @@ class FTPdLite:
             await self.send_response(250, "OK.", writer)
         return True
 
+    async def site(self, param, writer):
+        if param.lower() == "df":
+            properties = statvfs("/")
+            fragment_size = properties[1]
+            blocks_total = properties[2]
+            blocks_available = properties[4]
+            size_kb = int(blocks_total * fragment_size / 1024)
+            avail_kb = int(blocks_available * fragment_size / 1024)
+            used_kb = size_kb - avail_kb
+            percent_used = round(100 * used_kb / size_kb)
+            df_output = [
+                "Filesystem      Size      Used     Avail   Use%",
+                f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%"
+            ]
+            await self.send_response(211, df_output, writer)
+        else:
+            await self.send_response(504, "Parameter not supported.", writer)
+        return True
+
+    async def stor(self, filepath, writer):
+        filepath = FTPdLite.decode_path(filepath)
+        await sleep_ms(500)  # kluge to wait for data connection to be ready
+        try:
+            self.data_writer
+        except NameError:
+            await self.send_response(425, "Data connection failed.", writer)
+        else:
+            await self.send_response(150, "Transferring file.", writer)
+            try:
+                with open(filepath, "wb") as file:
+                    while True:
+                        chunk = await self.data_reader.read(64)
+                        if chunk:
+                            file.write(chunk)
+                        else:
+                            break
+            except OSError:
+                await self.send_response(451, "Error writing file.", writer)
+            else:
+                await self.send_response(226, "Transfer finished.", writer)
+            self.data_writer.close()
+            await self.data_writer.wait_closed()
+            del self.data_writer
+            self.data_reader.close()
+            await self.data_reader.wait_closed()
+            del self.data_reader
+            if self.debug:
+                print("Data connection closed.")
+        return True
+
     async def syst(self, _, writer):
         """
         Reply to indicate this server follows Unix conventions.
@@ -452,7 +508,7 @@ class FTPdLite:
         TYPE is implemented to satisfy some clients, but doesn't actually do anything.
         """
         if type.upper() in ("A", "A N", "I", "L 8"):
-            await self.send_response(200, f"Type: {type}", writer)
+            await self.send_response(200, "Always in binary mode.", writer)
         else:
             await self.send_response(504, "Invalid type.", writer)
         return True
