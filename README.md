@@ -29,8 +29,7 @@ Boot your microcontroller and point your FTP client to port 21.
 
 ## Caveats
 FTPdLite is a total alpha-quality product at the moment. It lacks several important features.
-* It does not support STOR, so no upload yet. Coming soon, as they say!
-* But in readonly mode, it works with tnftp on Raspberry Pi OS. Woohoo!
 * It currently does not play well with FileZilla. Not sure why. It's on the to-do list.
 * It does not support PORT mode transfers that Windows command-line FTP expects. But, that's more of a Windows problem.
 * MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
+* But, it works with the tnftp client on Raspberry Pi OS. Woohoo!
