@@ -1,8 +1,13 @@
 # Sample Session
-Tested by transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) from a Raspberry Pi to an ESP32-S3. The upload was successful, but not speedy at about 30 kB/sec. Download is twice as fast at about 60 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls.
+My standard stress test is transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) from a Raspberry Pi to FTPdLite on an ESP32-S3. The upload is successful, but not speedy, at about 30 kB/sec. Download is twice as fast, at about 60 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls. Downloads with wget are also tested.
 
-## tnftp Client on the Raspberry Pi 2B
+## Passive FTP Transfer with tnftp Client
+Using a Raspberry Pi 2B with Raspberry Pi OS Lite (no-GUI) and a command-line client, I uploaded to the ESP32 and then downloaded again.
+
+### Interactive FTP Session Screen Capture
 ```
+$ ftp 192.168.10.57
+Connected to 192.168.10.57
 220 FTPdLite (MicroPython)
 Name (192.168.10.57:pi): Felicia
 331 Password required for Felicia.
@@ -36,7 +41,7 @@ ftp> quit
 ```
 _Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll._
 
-## FTPdLite Log Output on the ESP32-S3 Serial Console
+### FTPdLite Log Output on the ESP32-S3 Serial Console
 ```
 Listening on 192.168.10.57:21
 220 FTPdLite (MicroPython)
@@ -78,3 +83,80 @@ QUIT
 221 Bye, Felicia.
 ```
 _Figure 2: Six hundred some odd lines of code committed just to sneak in Bye, Felicia_
+
+## Downloading Again to Test Active FTP Transfers
+I also used tnftp with the -A option to use only Active FTP data connections. The previous transfer used the PASV command to start the data connection. This is to test the PORT command.
+
+### Active FTP transfer Screen Capture
+```
+$ ftp -A 192.168.10.57
+Connected to 192.168.10.57.
+220 FTPdLite (MicroPython)
+Name (192.168.10.57:pi): Felicia
+331 Password required for Felicia.
+Password:
+230 Login successful.
+Remote system type is UNIX.
+Using binary mode to transfer files.
+ftp> cd /pub
+250 /pub
+ftp> get Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+local: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 remote: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+200 OK.
+150 Transferring file.
+  3327 KiB   74.52 KiB/s
+226 Transfer finished.
+3407402 bytes received in 00:44 (74.52 KiB/s)
+```
+
+_Figure 3: Successful transfer using archaic and firewall unfriendly Active FTP_
+
+### Active FTP Serial Console Log
+```
+220 FTPdLite (MicroPython)
+USER Felicia
+331 Password required for Felicia.
+PASS ********
+230 Login successful.
+SYST
+215 UNIX Type: L8
+FEAT
+211-Extensions supported:
+211-SIZE
+211 END
+CWD /pub
+250 /pub
+TYPE I
+200 Always in binary mode.
+EPRT |1|192.168.10.53|54671|
+502 Command not implemented.
+PORT 192,168,10,53,213,143
+Port address: 192,168,10,53,213,143
+Opening data connection to: 192.168.10.53:54671
+200 OK.
+RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+150 Transferring file.
+226 Transfer finished.
+```
+
+_Figure 4: Log output showing PORT command in case you didn't believe me._
+
+## Non-Interactive Transfer with wget
+Using wget is handy for scripted transfers, so I tested that too. Using wget for download was nearly ten seconds faster than using tnftp, so if you need to get your Rick roll on in a hurry, you know your go-to client.
+
+```
+$ wget --ftp-user=Felicia --ftp-password=Friday ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+--2023-11-14 19:57:40--  ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+           => ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3’
+Connecting to 192.168.10.57:21... connected.
+Logging in as Felicia ... Logged in!
+==> SYST ... done.    ==> PWD ... done.
+==> TYPE I ... done.  ==> CWD (1) /pub ... done.
+==> SIZE Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 ... 3407402
+==> PASV ... done.    ==> RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 ... done.
+Length: 3407402 (3.2M) (unauthoritative)
+
+Rick_Astley_-_Never 100%[===================>]   3.25M  71.8KB/s    in 46s
+
+2023-11-14 19:58:28 (72.6 KB/s) - ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3.1’ saved [3407402]
+```
