@@ -340,6 +340,7 @@ class FTPdLite:
             for entry in dir_entries:
                 properties = stat(dirpath + "/" + entry)
                 if properties[0] & 0x4000:  # entry is a directory
+                    entry += "/"
                     type = "d"
                     size = 0
                 else:
