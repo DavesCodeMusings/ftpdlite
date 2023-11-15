@@ -16,7 +16,7 @@ class FTPdLite:
         self,
         readonly=False,
         pasv_port_range=range(49152, 49407),
-        request_buffer_size=1024,
+        request_buffer_size=512,
     ):
         self.server_name = "FTPdLite (MicroPython)"
         self.credentials = "Felicia:Friday"
@@ -626,7 +626,7 @@ class FTPdLite:
         try:
             rmdir(dirpath)
         except OSError:
-            await self.send_response(550, "No such directory.", writer)
+            await self.send_response(550, "No such directory or directory not empty.", writer)
         else:
             await self.send_response(250, "OK.", writer)
         return True
