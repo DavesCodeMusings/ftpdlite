@@ -363,16 +363,7 @@ class FTPdLite:
                     self.data_writer.write(formatted_entry + "\r\n")
                 await self.data_writer.drain()
                 await self.send_response(226, "Directory list sent.", writer)
-                self.data_writer.close()
-                await self.data_writer.wait_closed()
-                del self.data_writer
-                self.data_reader.close()
-                await self.data_reader.wait_closed()
-                del self.data_reader
-                self.data_listener.close()
-                del self.data_listener
-                if self.debug:
-                    print("Data connection closed.")
+                await self.close_data_connection()
         return True
 
     async def mkd(self, dirpath, writer):
@@ -426,16 +417,7 @@ class FTPdLite:
                 else:
                     await self.data_writer.drain()
                     await self.send_response(226, "Directory list sent.", writer)
-                    self.data_writer.close()
-                    await self.data_writer.wait_closed()
-                    del self.data_writer
-                    self.data_reader.close()
-                    await self.data_reader.wait_closed()
-                    del self.data_reader
-                    self.data_listener.close()
-                    del self.data_listener
-                    if self.debug:
-                        print("Data connection closed.")
+                    await self.close_data_connection()
         return True
 
     async def noop(self, _, writer):
@@ -621,14 +603,7 @@ class FTPdLite:
                     await self.send_response(451, "Error reading file.", writer)
                 else:
                     await self.send_response(226, "Transfer finished.", writer)
-                self.data_writer.close()
-                await self.data_writer.wait_closed()
-                del self.data_writer
-                self.data_reader.close()
-                await self.data_reader.wait_closed()
-                del self.data_reader
-                if self.debug:
-                    print("Data connection closed.")
+                    await self.close_data_connection()
         return True
 
     async def rmd(self, dirpath, writer):
@@ -707,14 +682,7 @@ class FTPdLite:
                 await self.send_response(451, "Error writing file.", writer)
             else:
                 await self.send_response(226, "Transfer finished.", writer)
-            self.data_writer.close()
-            await self.data_writer.wait_closed()
-            del self.data_writer
-            self.data_reader.close()
-            await self.data_reader.wait_closed()
-            del self.data_reader
-            if self.debug:
-                print("Data connection closed.")
+                await self.close_data_connection()
         return True
 
     async def syst(self, _, writer):
@@ -742,6 +710,23 @@ class FTPdLite:
         self.username = username
         await self.send_response(331, f"Password required for {self.username}.", writer)
         return True
+
+    async def close_data_connection(self):
+        self.data_writer.close()
+        await self.data_writer.wait_closed()
+        del self.data_writer
+        self.data_reader.close()
+        await self.data_reader.wait_closed()
+        del self.data_reader
+        try:
+            self.data_listener
+        except AttributeError:
+            pass  # No data listener for Active FTP
+        else:
+            self.data_listener.close()
+            del self.data_listener
+            if self.debug:
+                print("Data connection closed.")
 
     async def on_data_connect(self, data_reader, data_writer):
         """
