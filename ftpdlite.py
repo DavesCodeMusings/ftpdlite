@@ -2,7 +2,7 @@
 
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 
-from asyncio import get_event_loop, sleep_ms, start_server
+from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 
@@ -33,6 +33,7 @@ class FTPdLite:
             "OPTS": self.opts,
             "PASS": self.passwd,
             "PASV": self.pasv,
+            "PORT": self.port,
             "PWD": self.pwd,
             "QUIT": self.quit,
             "RETR": self.retr,
@@ -289,7 +290,7 @@ class FTPdLite:
             _ (discard): does not take parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         features = [
@@ -308,7 +309,7 @@ class FTPdLite:
             _ (discard): this server does not support specific topics
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         await self.send_response(
@@ -405,17 +406,21 @@ class FTPdLite:
         else:
             await self.send_response(150, dirpath, writer)
             print("\n".join(dir_entries))
-            self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
-            await self.data_writer.drain()
-            await self.send_response(226, "Directory list sent.", writer)
-            self.data_writer.close()
-            await self.data_writer.wait_closed()
-            del self.data_writer
-            self.data_reader.close()
-            await self.data_reader.wait_closed()
-            del self.data_reader
-            if self.debug:
-                print("Data connection closed.")
+            try:
+                self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
+            except OSError:
+                self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+            else:
+                await self.data_writer.drain()
+                await self.send_response(226, "Directory list sent.", writer)
+                self.data_writer.close()
+                await self.data_writer.wait_closed()
+                del self.data_writer
+                self.data_reader.close()
+                await self.data_reader.wait_closed()
+                del self.data_reader
+                if self.debug:
+                    print("Data connection closed.")
         return True
 
     async def noop(self, _, writer):
@@ -426,7 +431,7 @@ class FTPdLite:
             _ (discard): command does not take parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         await self.send_response(200, "Take your time. I'll wait.", writer)
@@ -440,7 +445,7 @@ class FTPdLite:
             _ (discard): throw away parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         await self.send_response(550, "No access.", writer)
@@ -454,7 +459,7 @@ class FTPdLite:
             option (string): the option and its value
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         if option.upper() == "UTF8 ON":
@@ -471,7 +476,7 @@ class FTPdLite:
             password (string): the cleartext password
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: True if login succeeded, False if not
         """
         if self.debug:
@@ -496,7 +501,7 @@ class FTPdLite:
             _ (discard): command does not take parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         host_octets = self.host.replace(".", ",")
@@ -515,6 +520,32 @@ class FTPdLite:
         )
         return True
 
+    async def port(self, address, writer):
+        """
+        Open a connection to the FTP client at the specified address/port.
+
+        Args:
+            address (string): comma-separated octets as specified in RFC-959
+            writer (stream): the FTP client's control connection
+        Returns:
+            boolean: always True
+        """
+        print(f"Port address: {address}")
+        if address.count(",") != 5:
+            await self.send_response(451, "Invalid parameter.", writer)
+        else:
+            a = address.split(",")
+            host = f"{a[0]}.{a[1]}.{a[2]}.{a[3]}"
+            port = int(a[4]) * 256 + int(a[5])
+            print(f"Opening data connection to: {host}:{port}")
+            try:
+                self.data_reader, self.data_writer = await open_connection(host, port)
+            except OSError:
+                await self.send_response(425, "Could not open data connection.", writer)
+            else:
+                await self.send_response(200, "OK.", writer)
+        return True
+
     async def pwd(self, _, writer):
         """
         Report back with the current working directory.
@@ -523,7 +554,7 @@ class FTPdLite:
             _ (discard): command does not take parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always True
         """
         await self.send_response(257, f'"{getcwd()}"', writer)
@@ -537,7 +568,7 @@ class FTPdLite:
             _ (discard): command does not take parameters
             writer (stream): the FTP client's control connection
 
-        Return:
+        Returns:
             boolean: always False
         """
         await self.send_response(221, f"Bye, {self.username}.", writer)
