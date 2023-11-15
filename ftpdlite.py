@@ -335,7 +335,7 @@ class FTPdLite:
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await sleep_ms(500)  # kluge to wait for data connection to be ready
+            await sleep_ms(500)  # kludge to wait for data connection to be ready
             await self.send_response(150, dirpath, writer)
             for entry in dir_entries:
                 properties = stat(dirpath + "/" + entry)
@@ -397,7 +397,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await sleep_ms(500)  # kluge to wait for data connection to be ready
+        await sleep_ms(500)  # kludge to wait for data connection to be ready
         dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
@@ -592,7 +592,7 @@ class FTPdLite:
         except OSError:
             await self.send_response(550, "No such file.", writer)
         else:
-            await sleep_ms(500)  # kluge to wait for data connection to be ready
+            await sleep_ms(500)  # kludge to wait for data connection to be ready
             try:
                 self.data_writer  # should exist when data connection is active
             except NameError:
@@ -675,7 +675,7 @@ class FTPdLite:
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
-        await sleep_ms(500)  # kluge to wait for data connection to be ready
+        await sleep_ms(500)  # kludge to wait for data connection to be ready
         try:
             self.data_writer
         except NameError:
