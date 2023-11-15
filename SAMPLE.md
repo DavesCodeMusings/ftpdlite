@@ -1,4 +1,4 @@
-# Sample Session
+# Sample Sessions
 My standard stress test is transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) from a Raspberry Pi to FTPdLite on an ESP32-S3. The upload is successful, but not speedy, at about 30 kB/sec. Download is twice as fast, at about 60 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls. Downloads with wget are also tested.
 
 ## Passive FTP Transfer with tnftp Client
