@@ -335,37 +335,44 @@ class FTPdLite:
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await sleep_ms(500)  # kludge to wait for data connection to be ready
-            await self.send_response(150, dirpath, writer)
-            for entry in dir_entries:
-                properties = stat(dirpath + "/" + entry)
-                if properties[0] & 0x4000:  # entry is a directory
-                    entry += "/"
-                    type = "d"
-                    size = 0
-                else:
-                    type = "-"
-                    size = properties[6]
-                if self.readonly is True:
-                    permissions = "r--r--r--"
-                else:
-                    permissions = "rw-rw-rw-"
-                uid = "root" if properties[4] == 0 else properties[4]
-                gid = "root" if properties[5] == 0 else properties[5]
-                mtime = FTPdLite.date_format(properties[8])
-                formatted_entry = f"{type}{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
-                print(formatted_entry)
-                self.data_writer.write(formatted_entry + "\r\n")
-            await self.data_writer.drain()
-            await self.send_response(226, "Directory list sent.", writer)
-            self.data_writer.close()
-            await self.data_writer.wait_closed()
-            del self.data_writer
-            self.data_reader.close()
-            await self.data_reader.wait_closed()
-            del self.data_reader
-            if self.debug:
-                print("Data connection closed.")
+            await sleep_ms(100)  # kludge to ensure data connection is ready
+            try:
+                self.data_writer  # should exist when data connection is up
+            except AttributeError:
+                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+            else:
+                await self.send_response(150, dirpath, writer)
+                for entry in dir_entries:
+                    properties = stat(dirpath + "/" + entry)
+                    if properties[0] & 0x4000:  # entry is a directory
+                        entry += "/"
+                        type = "d"
+                        size = 0
+                    else:
+                        type = "-"
+                        size = properties[6]
+                    if self.readonly is True:
+                        permissions = "r--r--r--"
+                    else:
+                        permissions = "rw-rw-rw-"
+                    uid = "root" if properties[4] == 0 else properties[4]
+                    gid = "root" if properties[5] == 0 else properties[5]
+                    mtime = FTPdLite.date_format(properties[8])
+                    formatted_entry = f"{type}{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
+                    print(formatted_entry)
+                    self.data_writer.write(formatted_entry + "\r\n")
+                await self.data_writer.drain()
+                await self.send_response(226, "Directory list sent.", writer)
+                self.data_writer.close()
+                await self.data_writer.wait_closed()
+                del self.data_writer
+                self.data_reader.close()
+                await self.data_reader.wait_closed()
+                del self.data_reader
+                self.data_listener.close()
+                del self.data_listener
+                if self.debug:
+                    print("Data connection closed.")
         return True
 
     async def mkd(self, dirpath, writer):
@@ -398,30 +405,37 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await sleep_ms(500)  # kludge to wait for data connection to be ready
         dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await self.send_response(150, dirpath, writer)
-            print("\n".join(dir_entries))
+            await sleep_ms(100)  # kludge to ensure data connection is ready
             try:
-                self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
-            except OSError:
-                self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                self.data_writer
+            except AttributeError:
+                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
             else:
-                await self.data_writer.drain()
-                await self.send_response(226, "Directory list sent.", writer)
-                self.data_writer.close()
-                await self.data_writer.wait_closed()
-                del self.data_writer
-                self.data_reader.close()
-                await self.data_reader.wait_closed()
-                del self.data_reader
-                if self.debug:
-                    print("Data connection closed.")
+                await self.send_response(150, dirpath, writer)
+                print("\n".join(dir_entries))
+                try:
+                    self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
+                except OSError:
+                    self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                else:
+                    await self.data_writer.drain()
+                    await self.send_response(226, "Directory list sent.", writer)
+                    self.data_writer.close()
+                    await self.data_writer.wait_closed()
+                    del self.data_writer
+                    self.data_reader.close()
+                    await self.data_reader.wait_closed()
+                    del self.data_reader
+                    self.data_listener.close()
+                    del self.data_listener
+                    if self.debug:
+                        print("Data connection closed.")
         return True
 
     async def noop(self, _, writer):
@@ -511,9 +525,7 @@ class FTPdLite:
         port_octet_low = port % 256
         if self.debug:
             print(f"Starting data listener on port: {self.host}:{port}")
-        loop = get_event_loop()
-        data_listener = start_server(self.on_data_connect, self.host, port, 1)
-        await loop.create_task(data_listener)
+        self.data_listener = await start_server(self.on_data_connect, self.host, port, 1)
         await self.send_response(
             227,
             f"Entering passive mode ={host_octets},{port_octet_high},{port_octet_low}",
@@ -593,9 +605,9 @@ class FTPdLite:
         except OSError:
             await self.send_response(550, "No such file.", writer)
         else:
-            await sleep_ms(500)  # kludge to wait for data connection to be ready
+            await sleep_ms(100)  # kludge to wait for data connection to be ready
             try:
-                self.data_writer  # should exist when data connection is active
+                self.data_writer
             except NameError:
                 await self.send_response(425, "Data connection failed.", writer)
             else:
@@ -676,7 +688,7 @@ class FTPdLite:
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
-        await sleep_ms(500)  # kludge to wait for data connection to be ready
+        # await sleep_ms(100)  # kludge to wait for data connection to be ready
         try:
             self.data_writer
         except NameError:
