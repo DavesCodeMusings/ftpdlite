@@ -39,9 +39,9 @@ py -m mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
 ```
 
 ## Caveats
-FTPdLite is a total alpha-quality product at the moment. It lacks several important features.
-* MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
+FTPdLite is a total alpha-quality product at the moment. It does not work with all clients.
 * It's not multi-user capable. Even the same user on multiple simultaneous client connections is flaky.
-* Does not play well with FileZilla. Not sure why. It's on the to-do list.
-* Have not yet tested successfully with Windows' ftp.exe, though PORT data transfers are supported.
-* But hey, it works with the tnftp client on Raspberry Pi OS. Woohoo!
+* MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
+* Does not play well with FileZilla or WinSCP GUI clients. Not sure why. It's on the to-do list.
+* Have not yet tested successfully with Windows' ftp.exe, though PORT data channel is supported.
+* But hey, it works with wget and the tnftp client on Raspberry Pi OS. Woohoo!
