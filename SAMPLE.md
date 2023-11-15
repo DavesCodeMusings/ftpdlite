@@ -85,7 +85,7 @@ QUIT
 _Figure 2: Six hundred some odd lines of code committed just to sneak in Bye, Felicia_
 
 ## Downloading Again to Test Active FTP Transfers
-I also used tnftp with the -A option to use only Active FTP data connections. The previous transfer used the PASV command to start the data connection. This is to test the PORT command.
+I also used tnftp with the -A option to use only Active FTP data connections. The previous transfer used the PASV command to start the data connection. This is to test FTPdLite's handling of the PORT command.
 
 ### Active FTP transfer Screen Capture
 ```
@@ -142,7 +142,7 @@ RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 _Figure 4: Log output showing PORT command in case you didn't believe me._
 
 ## Non-Interactive Transfer with wget
-Using wget is handy for scripted transfers, so I tested that too. Using wget for download was nearly ten seconds faster than using tnftp, so if you need to get your Rick roll on in a hurry, you know your go-to client.
+Using wget is handy for scripted transfers, so I tested that too. Using wget for download was nearly ten seconds faster than using tnftp, so if you need to get your groove on in a hurry, you know your go-to client.
 
 ```
 $ wget --ftp-user=Felicia --ftp-password=Friday ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
