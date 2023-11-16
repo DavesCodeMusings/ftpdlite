@@ -686,7 +686,7 @@ class FTPdLite:
 
     async def stat(self, pathname, writer):
         """
-        Not very useful, but included for compatibility.
+        Report sytem status or existence of file/dir.
 
         Args:
             pathname (string): path to a file or directory
@@ -695,10 +695,18 @@ class FTPdLite:
             boolean: always True
         """
         if pathname is None or pathname == "":
+            seconds = time() - self.start_time
+            days = seconds // 86400
+            seconds = seconds % 86400
+            hours = seconds // 3600
+            hour_pad = "0" if hours < 10 else ""
+            seconds = seconds % 3600
+            mins = seconds // 60
+            mins_pad = "0" if mins < 10 else ""
             server_status = [
                 f"{self.server_name}",
                 f"System date: {FTPdLite.date_format(time())}",
-                f"Running since: {FTPdLite.date_format(self.start_time)}",
+                f"Uptime: {days} days, {hour_pad}{hours}:{mins_pad}{mins}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {self.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
