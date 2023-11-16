@@ -1,5 +1,9 @@
 # Sample Sessions
-My standard stress test is transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) from a Raspberry Pi to FTPdLite on an ESP32-S3. The upload is successful, but not speedy, at about 30 kB/sec. Download is twice as fast, at about 60 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls, so I'd call it a win. Downloads with wget are also tested.
+My standard stress test is transferring a 128 kbps joint stereo MP3 file of Rick Astley's 1987 hit song, Never Gonna Give You Up (about 3.25MB) from a Raspberry Pi to FTPdLite on an ESP32-S3 using various clients.
+
+The upload is successful, but not speedy, at about 30 kB/sec. Download is twice as fast, at up to 70 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls, so I'd call it a win.
+
+For all tests, the ESP32-S3 was on a separate IoT network behind a firewall.
 
 ## Passive FTP Transfer with tnftp Client
 Using a Raspberry Pi 2B with Raspberry Pi OS Lite (no-GUI) and a command-line client, I uploaded to the ESP32 and then downloaded again.
@@ -141,9 +145,39 @@ RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 
 _Figure 4: Log output showing PORT command in case you didn't believe me._
 
-## Non-Interactive Transfer with wget
-Using wget is handy for scripted transfers, so I tested that too. Using wget for download was nearly ten seconds faster than using tnftp, so if you need to get your groove on in a hurry, you know your go-to client.
+## Active FTP Behind a Firewall
+```
+C:\> ftp 192.168.10.57
+Connected to 192.168.10.57.
+220 FTPdLite (MicroPython)
+200 Always in UTF8 mode.
+User (192.168.10.57:(none)): Felicia
+331 Password required for Felicia.
+Password:
+230 Login successful.
+ftp> cd /pub
+250 /pub
+ftp> ls
+200 OK.
+150 /pub
+```
 
+_Figure 5: Windows ftp.exe just doesn't work behind a firewall._
+
+## Non-Interactive Transfer
+Using curl or wget is handy for scripted transfers, so I tested that too. The wget download was nearly ten seconds faster than tnftp, so if you need to get your groove on in a hurry, you know your go-to client.
+
+### Using curl
+```
+$ curl -u Felicia:Friday ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 --output Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100 3327k  100 3327k    0     0  66505      0  0:00:51  0:00:51 --:--:-- 64074
+```
+
+_Figure 5: Not quite as fast as tnftp_
+
+### Using wget
 ```
 $ wget --ftp-user=Felicia --ftp-password=Friday ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 --2023-11-14 19:57:40--  ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
@@ -161,4 +195,4 @@ Rick_Astley_-_Never 100%[===================>]   3.25M  71.8KB/s    in 46s
 2023-11-14 19:58:28 (72.6 KB/s) - ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3’ saved [3407402]
 ```
 
-_Figure 5: Winner of the speedy download crown, it's wget!_
+_Figure 6: Winner of the speedy download crown, it's wget!_
