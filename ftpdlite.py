@@ -95,23 +95,21 @@ class FTPdLite:
             "Dec",
         ]
         datetime = localtime(timestamp)
-        month = months[datetime[1] - 1]
+        mon = months[datetime[1] - 1]
         day = datetime[2]
-        day_space = " " if day < 10 else ""
+        day_pad = " " if day < 10 else ""
         year = datetime[0]
         hour = datetime[3]
-        hour_padding = "0" if hour < 10 else ""
-        minute = datetime[4]
-        minute_padding = "0" if minute < 10 else ""
+        hour_pad = "0" if hour < 10 else ""
+        min = datetime[4]
+        min_pad = "0" if min < 10 else ""
         now = time()
         one_year = 31536000
 
         if now - timestamp < one_year:
-            output = "{} {}{} {}{}:{}{}".format(
-                month, day_space, day, hour_padding, hour, minute_padding, minute
-            )
+            output = f"{mon} {day_pad}{day} {hour_pad}{hour}:{min_pad}{min}"
         else:
-            output = "{} {}{}  {}".format(month, day_space, day, year)
+            output = f"{mon} {day_pad}{day}  {year}"
         return output
 
     @staticmethod
@@ -625,7 +623,10 @@ class FTPdLite:
         in the common set of FTP commands. This server offers the Unix-
         style `df` command as a way to show file system utilization.
         """
-        if param.lower() == "df":
+        if param.lower() == "date":
+            now = FTPdLite.date_format(time())
+            await self.send_response(211, now, writer)
+        elif param.lower() == "df":
             properties = statvfs("/")
             fragment_size = properties[1]
             blocks_total = properties[2]
