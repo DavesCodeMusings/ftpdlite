@@ -696,7 +696,8 @@ class FTPdLite:
         """
         if pathname is None or pathname == "":
             server_status = [
-                f"{self.server_name} {FTPdLite.date_format(time())}",
+                f"{self.server_name}",
+                f"System date: {FTPdLite.date_format(time())}",
                 f"Running since: {FTPdLite.date_format(self.start_time)}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {self.username}",
