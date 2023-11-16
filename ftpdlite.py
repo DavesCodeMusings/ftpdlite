@@ -723,7 +723,7 @@ class FTPdLite:
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
-        # await sleep_ms(100)  # kludge to wait for data connection to be ready
+        await sleep_ms(100)  # kludge to wait for data connection to be ready
         try:
             self.data_writer
         except NameError:
