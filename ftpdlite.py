@@ -5,6 +5,7 @@
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
+from network import hostname
 
 
 class FTPdLite:
@@ -643,9 +644,13 @@ class FTPdLite:
         in the common set of FTP commands. This server offers the Unix-
         style `df` command as a way to show file system utilization.
         """
-        if param.lower() == "date":
-            now = FTPdLite.date_format(time())
-            await self.send_response(211, now, writer)
+        if param.lower().startswith("cat "):
+            filepath = param.split(None, 1)[1]
+            try:
+                with open(filepath) as f:
+                    await self.send_response(211, [line.rstrip() for line in f] + ["EOF"], writer)
+            except OSError:
+                await self.send_response(550, "No such file.", writer)
         elif param.lower() == "df":
             properties = statvfs("/")
             fragment_size = properties[1]
@@ -658,6 +663,7 @@ class FTPdLite:
             df_output = [
                 "Filesystem      Size      Used     Avail   Use%",
                 f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%",
+                "End"
             ]
             await self.send_response(211, df_output, writer)
         else:
@@ -690,8 +696,9 @@ class FTPdLite:
         """
         if pathname is None or pathname == "":
             server_status = [
-                f"{self.server_name}",
+                f"{self.server_name} {FTPdLite.date_format(time())}",
                 f"Running since: {FTPdLite.date_format(self.start_time)}",
+                f"Connected to: {hostname()}",
                 f"Logged in as: {self.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
                 "End of status"
@@ -701,7 +708,7 @@ class FTPdLite:
             try:
                 properties = stat(pathname)
             except OSError:
-                await self.send_response(450, "No such file or directory.", writer)
+                await self.send_response(550, "No such file or directory.", writer)
             else:
                 if properties[0] & 0x4000:  # entry is a directory
                     await self.send_response(213, f"{pathname}", writer)
