@@ -3,7 +3,7 @@ My standard stress test is transferring a 128 kbps joint stereo MP3 file of Rick
 
 The upload is successful, but not speedy, at about 30 kB/sec. Download is twice as fast, at up to 70 kB/sec. It's kind of like Napster on a 56k modem. But, no errors and no stalls, so I'd call it a win.
 
-For all tests, the ESP32-S3 was on a separate IoT network behind a firewall.
+For all tests, the ESP32-S3 was on a separate IoT network behind a firewall, except where noted.
 
 ## Passive FTP Transfer with tnftp Client
 Using a Raspberry Pi 2B with Raspberry Pi OS Lite (no-GUI) and a command-line client, I uploaded to the ESP32 and then downloaded again.
@@ -88,8 +88,27 @@ QUIT
 ```
 _Figure 2: Seven hundred some odd lines of code committed just to sneak in Bye, Felicia_
 
+## Windows ftp.exe Behind a Firewall
+```
+C:\> ftp 192.168.10.57
+Connected to 192.168.10.57.
+220 FTPdLite (MicroPython)
+200 Always in UTF8 mode.
+User (192.168.10.57:(none)): Felicia
+331 Password required for Felicia.
+Password:
+230 Login successful.
+ftp> cd /pub
+250 /pub
+ftp> ls
+200 OK.
+150 /pub
+```
+
+_Figure 3: The data connection just hangs, proving 1990s technology still sucks._
+
 ## Downloading Again to Test Active FTP Transfers
-I also used tnftp with the -A option to use only Active FTP data connections. The previous transfer used the PASV command to start the data connection. This is to test FTPdLite's handling of the PORT command.
+I also used tnftp with the -A option to use only Active FTP data connections. This is to test FTPdLite's handling of the PORT command. For this test, the ESP32 was moved to the same network as the client, so there was no firewall in-between.
 
 ### Active FTP transfer Screen Capture
 ```
@@ -113,7 +132,7 @@ local: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 remote: Rick_Astley_-_Never_Gon
 3407402 bytes received in 00:44 (74.52 KiB/s)
 ```
 
-_Figure 3: Successful transfer using archaic and firewall unfriendly Active FTP_
+_Figure 4: Successful transfer using archaic and firewall unfriendly Active FTP_
 
 ### Active FTP Serial Console Log
 ```
@@ -143,26 +162,7 @@ RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 226 Transfer finished.
 ```
 
-_Figure 4: Log output showing PORT command in case you didn't believe me._
-
-## Active FTP Behind a Firewall
-```
-C:\> ftp 192.168.10.57
-Connected to 192.168.10.57.
-220 FTPdLite (MicroPython)
-200 Always in UTF8 mode.
-User (192.168.10.57:(none)): Felicia
-331 Password required for Felicia.
-Password:
-230 Login successful.
-ftp> cd /pub
-250 /pub
-ftp> ls
-200 OK.
-150 /pub
-```
-
-_Figure 5: Windows ftp.exe just doesn't work behind a firewall._
+_Figure 5: Log output showing PORT command in case you didn't believe me._
 
 ## Non-Interactive Transfer
 Using curl or wget is handy for scripted transfers, so I tested that too. The wget download was nearly ten seconds faster than tnftp, so if you need to get your groove on in a hurry, you know your go-to client.
@@ -175,7 +175,7 @@ $ curl -u Felicia:Friday ftp://192.168.10.57//pub/Rick_Astley_-_Never_Gonna_Give
 100 3327k  100 3327k    0     0  66505      0  0:00:51  0:00:51 --:--:-- 64074
 ```
 
-_Figure 5: Not quite as fast as tnftp_
+_Figure 6: Not quite as fast as tnftp_
 
 ### Using wget
 ```
@@ -195,4 +195,4 @@ Rick_Astley_-_Never 100%[===================>]   3.25M  71.8KB/s    in 46s
 2023-11-14 19:58:28 (72.6 KB/s) - ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3’ saved [3407402]
 ```
 
-_Figure 6: Winner of the speedy download crown, it's wget!_
+_Figure 7: Winner of the speedy download crown, it's wget!_
