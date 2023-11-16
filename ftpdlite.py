@@ -849,17 +849,30 @@ class FTPdLite:
         if self.debug:
             print(f"Control connection closed for {client_ip}")
 
-    def run(self, host="0.0.0.0", port=21, debug=False):
+    def run(self, host="0.0.0.0", port=21, loop=None, debug=False):
         """
-        Start the FTP server on the given interface and TCP port.
+        Start an asynchronous listener for FTP requests.
+
+        Args:
+            host (string): the IP address of the interface on which to
+              listen (0.0.0.0 means all interfaces)
+            port (int): the TCP port on which to listen
+            loop (object): the asyncio loop that the server should
+              insert itself into
+            debug (boolean): True indicates verbose logging is desired
+
+        Returns:
+            object: the same loop object given as a parameter or a new
+              one if no existing loop was passed
         """
         self.host = host
+        self.port = port
         self.debug = debug
         now = time()
         jan_1_2023 = mktime((2023, 1, 1, 0, 0, 0, 0, 1))
         if now < jan_1_2023:
             print("WARNING: System clock not set. File timestamps will be incorrect.")
-        print(f"Listening on {host}:{port}")
+        print(f"Listening on {self.host}:{self.port}")
         loop = get_event_loop()
         server = start_server(self.on_ctrl_connect, host, port, 5)
         loop.create_task(server)
