@@ -82,7 +82,7 @@ RETR Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
 QUIT
 221 Bye, Felicia.
 ```
-_Figure 2: Six hundred some odd lines of code committed just to sneak in Bye, Felicia_
+_Figure 2: Seven hundred some odd lines of code committed just to sneak in Bye, Felicia_
 
 ## Downloading Again to Test Active FTP Transfers
 I also used tnftp with the -A option to use only Active FTP data connections. The previous transfer used the PASV command to start the data connection. This is to test FTPdLite's handling of the PORT command.
