@@ -108,7 +108,7 @@ ftp> ls
 _Figure 3: The data connection just hangs, proving 1990s technology still sucks._
 
 ## Downloading Again to Test Active FTP Transfers
-I also used tnftp with the -A option to use only Active FTP data connections. This is to test FTPdLite's handling of the PORT command. For this test, the ESP32 was moved to the same network as the client, so there was no firewall in-between.
+I also used tnftp with the -A option to use only Active FTP data connections. This is to test FTPdLite's handling of the PORT command. For this test, the ESP32 was moved to the same network as the client, so there was no firewall in-between. To be fair, ftp.exe works too when there's no firewall in-between, and the transfer speed is decent.
 
 ### Active FTP transfer Screen Capture
 ```
