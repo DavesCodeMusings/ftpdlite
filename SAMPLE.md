@@ -39,7 +39,7 @@ local: Rick_Astley_-_Never_Gonna_Give_You_Up.mp3 remote: Rick_Astley_-_Never_Gon
 ftp> quit
 221 Bye, Felicia.
 ```
-_Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll._
+_Figure 1: Over half my flash RAM dedicated to an elaborate Rick roll_
 
 ### FTPdLite Log Output on the ESP32-S3 Serial Console
 ```
