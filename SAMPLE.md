@@ -158,7 +158,7 @@ Length: 3407402 (3.2M) (unauthoritative)
 
 Rick_Astley_-_Never 100%[===================>]   3.25M  71.8KB/s    in 46s
 
-2023-11-14 19:58:28 (72.6 KB/s) - ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3.1’ saved [3407402]
+2023-11-14 19:58:28 (72.6 KB/s) - ‘Rick_Astley_-_Never_Gonna_Give_You_Up.mp3’ saved [3407402]
 ```
 
 _Figure 5: Winner of the speedy download crown, it's wget!_
