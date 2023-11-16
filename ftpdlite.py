@@ -21,6 +21,7 @@ class FTPdLite:
         self.server_name = "FTPdLite (MicroPython)"
         self.credentials = "Felicia:Friday"
         self.readonly = readonly
+        self.start_time = time()
         self.request_buffer_size = request_buffer_size
         self.pasv_port_pool = list(pasv_port_range)
         self.command_dictionary = {
@@ -28,6 +29,7 @@ class FTPdLite:
             "FEAT": self.feat,
             "HELP": self.help,
             "LIST": self.list,
+            "MODE": self.mode,
             "NLST": self.nlst,
             "NOOP": self.noop,
             "OPTS": self.opts,
@@ -39,6 +41,8 @@ class FTPdLite:
             "RETR": self.retr,
             "SITE": self.site,
             "SIZE": self.size,
+            "STAT": self.stat,
+            "STRU": self.stru,
             "SYST": self.syst,
             "TYPE": self.type,
             "USER": self.user,
@@ -364,6 +368,22 @@ class FTPdLite:
                 await self.close_data_connection()
         return True
 
+    async def mode(self, param, writer):
+        """
+        Obsolete, but included for compatibility.
+
+        Args:
+            param (string): single character to indicate transfer mode
+
+        Returns:
+            boolean: always True
+        """
+        if param.upper() == "S":
+            await self.send_response(200, "OK.", writer)
+        else:
+            await self.send_response(504, "Transfer mode not supported.", writer)
+        return True
+
     async def mkd(self, dirpath, writer):
         """
         Given a path, create a new directory.
@@ -658,6 +678,37 @@ class FTPdLite:
             await self.send_response(213, f"{size}", writer)
         return True
 
+    async def stat(self, pathname, writer):
+        """
+        Not very useful, but included for compatibility.
+
+        Args:
+            pathname (string): path to a file or directory
+
+        Returns:
+            boolean: always True
+        """
+        if pathname is None or pathname == "":
+            server_status = [
+                f"{self.server_name}",
+                f"Running since: {FTPdLite.date_format(self.start_time)}",
+                f"Logged in as: {self.username}",
+                "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
+                "End of status"
+            ]
+            await self.send_response(211, server_status, writer)
+        else:
+            try:
+                properties = stat(pathname)
+            except OSError:
+                await self.send_response(450, "No such file or directory.", writer)
+            else:
+                if properties[0] & 0x4000:  # entry is a directory
+                    await self.send_response(213, f"{pathname}", writer)
+                else:
+                    await self.send_response(211, f"{pathname}", writer)
+        return True
+    
     async def stor(self, filepath, writer):
         """
         Given a file path, open a data connection and write the incoming
@@ -684,6 +735,22 @@ class FTPdLite:
             else:
                 await self.send_response(226, "Transfer finished.", writer)
                 await self.close_data_connection()
+        return True
+
+    async def stru(self, param, writer):
+        """
+        Obsolete, but included for compatibility.
+
+        Args:
+            param (string): single character to indicate file structure
+
+        Returns:
+            boolean: always True
+        """
+        if param.upper() == "F":
+            await self.send_response(200, "OK.", writer)
+        else:
+            await self.send_response(504, "File structure not supported.", writer)
         return True
 
     async def syst(self, _, writer):
