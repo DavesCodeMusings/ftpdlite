@@ -338,10 +338,7 @@ class FTPdLite:
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await sleep_ms(100)  # kludge to ensure data connection is ready
-            try:
-                self.data_writer  # should exist when data connection is up
-            except AttributeError:
+            if await self.verify_data_connection() is False:
                 await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
             else:
                 await self.send_response(150, dirpath, writer)
@@ -421,10 +418,7 @@ class FTPdLite:
         except OSError:
             await self.send_response(451, "Unable to read directory.", writer)
         else:
-            await sleep_ms(100)  # kludge to ensure data connection is ready
-            try:
-                self.data_writer
-            except AttributeError:
+            if await self.verify_data_connection() is False:
                 await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
             else:
                 await self.send_response(150, dirpath, writer)
@@ -606,11 +600,8 @@ class FTPdLite:
         except OSError:
             await self.send_response(550, "No such file.", writer)
         else:
-            await sleep_ms(100)  # kludge to wait for data connection to be ready
-            try:
-                self.data_writer
-            except NameError:
-                await self.send_response(425, "Data connection failed.", writer)
+            if await self.verify_data_connection() is False:
+                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
             else:
                 await self.send_response(150, "Transferring file.", writer)
                 try:
@@ -710,7 +701,7 @@ class FTPdLite:
                 f"Connected to: {hostname()}",
                 f"Logged in as: {self.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
-                "End of status"
+                "End"
             ]
             await self.send_response(211, server_status, writer)
         else:
@@ -731,11 +722,8 @@ class FTPdLite:
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
-        await sleep_ms(100)  # kludge to wait for data connection to be ready
-        try:
-            self.data_writer
-        except NameError:
-            await self.send_response(425, "Data connection failed.", writer)
+        if await self.verify_data_connection() is False:
+            await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
         else:
             await self.send_response(150, "Transferring file.", writer)
             try:
@@ -795,6 +783,20 @@ class FTPdLite:
         await self.send_response(331, f"Password required for {self.username}.", writer)
         return True
 
+    async def verify_data_connection(self):
+        try:
+            self.data_reader
+            self.data_writer  # should exist when data connection is up
+        except AttributeError:
+            await sleep_ms(100)  # if not, wait and try again
+        try:
+            self.data_reader
+            self.data_writer
+        except AttributeError:
+            return False
+        else:
+            return True
+
     async def close_data_connection(self):
         self.data_writer.close()
         await self.data_writer.wait_closed()
@@ -849,7 +851,7 @@ class FTPdLite:
         if self.debug:
             print(f"Control connection closed for {client_ip}")
 
-    def run(self, host="0.0.0.0", port=21, loop=None, debug=False):
+    def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
         """
         Start an asynchronous listener for FTP requests.
 
