@@ -8,6 +8,48 @@ from time import localtime, mktime, time
 from network import hostname
 
 
+class Session:
+    """
+    An interactive connection from a client.
+    """
+
+    def __init__(self, client_ip, client_port, ctrl_reader, ctrl_writer):
+        self._client_ip = client_ip
+        self._client_port = client_port
+        self._login_time = time()
+        self._ctrl_reader = ctrl_reader
+        self._ctrl_writer = ctrl_writer
+        self._username = None
+
+    @property
+    def client_ip(self):
+        return self._client_ip
+
+    @property
+    def client_port(self):
+        return self._client_port
+
+    @property
+    def login_time(self):
+        return self._login_time
+
+    @property
+    def ctrl_reader(self):
+        return self._ctrl_reader
+
+    @property
+    def ctrl_writer(self):
+        return self._ctrl_writer
+
+    @property
+    def username(self):
+        return self._username
+
+    @username.setter
+    def username(self, username):
+        self._username = username
+
+
 class FTPdLite:
     """
     A minimalist FTP server for MicroPython.
@@ -245,13 +287,13 @@ class FTPdLite:
     # Each command function below returns a boolean to indicate if session
     # should be maintained (True) or ended (False.) Most return True.
 
-    async def cwd(self, dirpath, writer):
+    async def cwd(self, dirpath, session):
         """
         Change working directory.
 
         Args:
             dirpath (string): a path indicating a directory resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info 
 
         Returns:
             boolean: always True
@@ -260,18 +302,18 @@ class FTPdLite:
         try:
             chdir(dirpath)
         except OSError:
-            await self.send_response(550, "No such directory.", writer)
+            await self.send_response(550, "No such directory.", session.ctrl_writer)
         else:
-            await self.send_response(250, getcwd(), writer)
+            await self.send_response(250, getcwd(), session.ctrl_writer)
         return True
 
-    async def dele(self, filepath, writer):
+    async def dele(self, filepath, session):
         """
         Given a path, delete the file.
 
         Args:
             filepath (string): a path indicating a file resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -280,54 +322,52 @@ class FTPdLite:
         try:
             remove(filepath)
         except OSError:
-            await self.send_response(550, "No such file.", writer)
+            await self.send_response(550, "No such file.", session.ctrl_writer)
         else:
-            await self.send_response(250, "OK.", writer)
+            await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
-    async def feat(self, _, writer):
+    async def feat(self, _, session):
         """
         Reply with multi-line list of extra capabilities. RFC-2389
 
         Args:
             _ (discard): does not take parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
-        features = [
-            "Extensions supported:",
-            "SIZE",
-            "END"
-        ]
-        await self.send_response(211, features, writer)
+        features = ["Extensions supported:", "SIZE", "END"]
+        await self.send_response(211, features, session.ctrl_writer)
         return True
 
-    async def help(self, _, writer):
+    async def help(self, _, session):
         """
         Reply with help only in a general sense, not per individual command.
 
         Args:
             _ (discard): this server does not support specific topics
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
         await self.send_response(
-            211, "[FTPdLite](https://github.com/DavesCodeMusings/ftpdlite)", writer
+            211,
+            "[FTPdLite](https://github.com/DavesCodeMusings/ftpdlite)",
+            session.ctrl_writer,
         )
         return True
 
-    async def list(self, dirpath, writer):
+    async def list(self, dirpath, session):
         """
         Send a Linux style directory listing, though ownership and permission
         has no meaning in the flash filesystem.
 
         Args:
             dirpath (string): a path indicating a directory resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -336,12 +376,18 @@ class FTPdLite:
         try:
             dir_entries = listdir(dirpath)
         except OSError:
-            await self.send_response(451, "Unable to read directory.", writer)
+            await self.send_response(
+                451, "Unable to read directory.", session.ctrl_writer
+            )
         else:
             if await self.verify_data_connection() is False:
-                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                await self.send_response(
+                    426,
+                    "Data connection closed. Transfer aborted.",
+                    session.ctrl_writer,
+                )
             else:
-                await self.send_response(150, dirpath, writer)
+                await self.send_response(150, dirpath, session.ctrl_writer)
                 for entry in dir_entries:
                     properties = stat(dirpath + "/" + entry)
                     if properties[0] & 0x4000:  # entry is a directory
@@ -362,11 +408,13 @@ class FTPdLite:
                     print(formatted_entry)
                     self.data_writer.write(formatted_entry + "\r\n")
                 await self.data_writer.drain()
-                await self.send_response(226, "Directory list sent.", writer)
+                await self.send_response(
+                    226, "Directory list sent.", session.ctrl_writer
+                )
                 await self.close_data_connection()
         return True
 
-    async def mode(self, param, writer):
+    async def mode(self, param, session):
         """
         Obsolete, but included for compatibility.
 
@@ -377,18 +425,20 @@ class FTPdLite:
             boolean: always True
         """
         if param.upper() == "S":
-            await self.send_response(200, "OK.", writer)
+            await self.send_response(200, "OK.", session.ctrl_writer)
         else:
-            await self.send_response(504, "Transfer mode not supported.", writer)
+            await self.send_response(
+                504, "Transfer mode not supported.", session.ctrl_writer
+            )
         return True
 
-    async def mkd(self, dirpath, writer):
+    async def mkd(self, dirpath, session):
         """
         Given a path, create a new directory.
 
         Args:
             dirpath (string): a path indicating the directory resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -396,18 +446,20 @@ class FTPdLite:
         dirpath = FTPdLite.decode_path(dirpath)
         try:
             mkdir(dirpath)
-            await self.send_response(250, f'"{dirpath}"', writer)
+            await self.send_response(250, f'"{dirpath}"', session.ctrl_writer)
         except OSError:
-            await self.send_response(550, "Failed to create directory.", writer)
+            await self.send_response(
+                550, "Failed to create directory.", session.ctrl_writer
+            )
         return True
 
-    async def nlst(self, dirpath, writer):
+    async def nlst(self, dirpath, session):
         """
         Send a list of file names only, without the extra information.
 
         Args:
             dirpath (string): a path indicating a directory resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -416,100 +468,114 @@ class FTPdLite:
         try:
             dir_entries = listdir(dirpath)
         except OSError:
-            await self.send_response(451, "Unable to read directory.", writer)
+            await self.send_response(
+                451, "Unable to read directory.", session.ctrl_writer
+            )
         else:
             if await self.verify_data_connection() is False:
-                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                await self.send_response(
+                    426,
+                    "Data connection closed. Transfer aborted.",
+                    session.ctrl_writer,
+                )
             else:
-                await self.send_response(150, dirpath, writer)
+                await self.send_response(150, dirpath, session.ctrl_writer)
                 print("\n".join(dir_entries))
                 try:
                     self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
                 except OSError:
-                    self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                    self.send_response(
+                        426,
+                        "Data connection closed. Transfer aborted.",
+                        session.ctrl_writer,
+                    )
                 else:
                     await self.data_writer.drain()
-                    await self.send_response(226, "Directory list sent.", writer)
+                    await self.send_response(
+                        226, "Directory list sent.", session.ctrl_writer
+                    )
                     await self.close_data_connection()
         return True
 
-    async def noop(self, _, writer):
+    async def noop(self, _, session):
         """
         Do nothing. Used by some clients to stop the connection from timing out.
 
         Args:
             _ (discard): command does not take parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
-        await self.send_response(200, "Take your time. I'll wait.", writer)
+        await self.send_response(200, "Take your time. I'll wait.", session.ctrl_writer)
         return True
 
-    async def no_permission(self, _, writer):
+    async def no_permission(self, _, session):
         """
         Return an error. Used when the server is in readonly mode.
 
         Args:
             _ (discard): throw away parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
-        await self.send_response(550, "No access.", writer)
+        await self.send_response(550, "No access.", session.ctrl_writer)
         return True
 
-    async def opts(self, option, writer):
+    async def opts(self, option, session):
         """
         Reply to the common case of UTF-8, but nothing else. RFC-2389
 
         Args:
             option (string): the option and its value
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
         if option.upper() == "UTF8 ON":
-            await self.send_response(200, "Always in UTF8 mode.", writer)
+            await self.send_response(200, "Always in UTF8 mode.", session.ctrl_writer)
         else:
-            await self.send_response(501, "Unknown option.", writer)
+            await self.send_response(501, "Unknown option.", session.ctrl_writer)
         return True
 
-    async def passwd(self, password, writer):
+    async def passwd(self, password, session):
         """
         Verify user credentials and drop the connection if incorrect.
 
         Args:
             password (string): the cleartext password
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: True if login succeeded, False if not
         """
         if self.debug:
             print("Expecting:", self.credentials)
-            print(f"Got: {self.username}:{password}")
+            print(f"Got: {session.username}:{password}")
         if (
-            self.username == self.credentials.split(":", 1)[0]
+            session.username == self.credentials.split(":", 1)[0]
             and password == self.credentials.split(":", 1)[1]
         ):
-            await self.send_response(230, "Login successful.", writer)
+            await self.send_response(230, "Login successful.", session.ctrl_writer)
             return True
         else:
-            await self.send_response(430, "Invalid username or password.", writer)
+            await self.send_response(
+                430, "Invalid username or password.", session.ctrl_writer
+            )
             return False
 
-    async def pasv(self, _, writer):
+    async def pasv(self, _, session):
         """
         Start a new data listener on one of the high numbered ports and
         report back to the client.
 
         Args:
             _ (discard): command does not take parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -520,27 +586,29 @@ class FTPdLite:
         port_octet_low = port % 256
         if self.debug:
             print(f"Starting data listener on port: {self.host}:{port}")
-        self.data_listener = await start_server(self.on_data_connect, self.host, port, 1)
+        self.data_listener = await start_server(
+            self.on_data_connect, self.host, port, 1
+        )
         await self.send_response(
             227,
             f"Entering passive mode ={host_octets},{port_octet_high},{port_octet_low}",
-            writer,
+            session.ctrl_writer,
         )
         return True
 
-    async def port(self, address, writer):
+    async def port(self, address, session):
         """
         Open a connection to the FTP client at the specified address/port.
 
         Args:
             address (string): comma-separated octets as specified in RFC-959
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
         Returns:
             boolean: always True
         """
         print(f"Port address: {address}")
         if address.count(",") != 5:
-            await self.send_response(451, "Invalid parameter.", writer)
+            await self.send_response(451, "Invalid parameter.", session.ctrl_writer)
         else:
             a = address.split(",")
             host = f"{a[0]}.{a[1]}.{a[2]}.{a[3]}"
@@ -549,47 +617,49 @@ class FTPdLite:
             try:
                 self.data_reader, self.data_writer = await open_connection(host, port)
             except OSError:
-                await self.send_response(425, "Could not open data connection.", writer)
+                await self.send_response(
+                    425, "Could not open data connection.", session.ctrl_writer
+                )
             else:
-                await self.send_response(200, "OK.", writer)
+                await self.send_response(200, "OK.", session.ctrl_writer)
         return True
 
-    async def pwd(self, _, writer):
+    async def pwd(self, _, session):
         """
         Report back with the current working directory.
 
         Args:
             _ (discard): command does not take parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
         """
-        await self.send_response(257, f'"{getcwd()}"', writer)
+        await self.send_response(257, f'"{getcwd()}"', session.ctrl_writer)
         return True
 
-    async def quit(self, _, writer):
+    async def quit(self, _, session):
         """
         User sign off. Returning False signals exit by the control channel loop.
 
         Args:
             _ (discard): command does not take parameters
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always False
         """
-        await self.send_response(221, f"Bye, {self.username}.", writer)
+        await self.send_response(221, f"Bye, {session.username}.", session.ctrl_writer)
         return False
 
-    async def retr(self, filepath, writer):
+    async def retr(self, filepath, session):
         """
         Given a file path, retrieve the file from flash ram and send it to
         the client over the data connection established by PASV.
 
         Args:
             file (string): a path indicating the file resource
-            writer (stream): the FTP client's control connection
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -598,25 +668,33 @@ class FTPdLite:
         try:
             stat(filepath)
         except OSError:
-            await self.send_response(550, "No such file.", writer)
+            await self.send_response(550, "No such file.", session.ctrl_writer)
         else:
             if await self.verify_data_connection() is False:
-                await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+                await self.send_response(
+                    426,
+                    "Data connection closed. Transfer aborted.",
+                    session.ctrl_writer,
+                )
             else:
-                await self.send_response(150, "Transferring file.", writer)
+                await self.send_response(150, "Transferring file.", session.ctrl_writer)
                 try:
                     with open(filepath, "rb") as file:
                         for chunk in FTPdLite.read_file_chunk(file):
                             self.data_writer.write(chunk)
                             await self.data_writer.drain()
                 except OSError:
-                    await self.send_response(451, "Error reading file.", writer)
+                    await self.send_response(
+                        451, "Error reading file.", session.ctrl_writer
+                    )
                 else:
-                    await self.send_response(226, "Transfer finished.", writer)
+                    await self.send_response(
+                        226, "Transfer finished.", session.ctrl_writer
+                    )
                     await self.close_data_connection()
         return True
 
-    async def rmd(self, dirpath, writer):
+    async def rmd(self, dirpath, session):
         """
         Given a directory path, remove the directory. Must be empty.
         """
@@ -624,25 +702,20 @@ class FTPdLite:
         try:
             rmdir(dirpath)
         except OSError:
-            await self.send_response(550, "No such directory or directory not empty.", writer)
+            await self.send_response(
+                550, "No such directory or directory not empty.", session.ctrl_writer
+            )
         else:
-            await self.send_response(250, "OK.", writer)
+            await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
-    async def site(self, param, writer):
+    async def site(self, param, session):
         """
         RFC959 specifies SITE as a way to access services not defined
         in the common set of FTP commands. This server offers the Unix-
         style `df` command as a way to show file system utilization.
         """
-        if param.lower().startswith("cat "):
-            filepath = param.split(None, 1)[1]
-            try:
-                with open(filepath) as f:
-                    await self.send_response(211, [line.rstrip() for line in f] + ["EOF"], writer)
-            except OSError:
-                await self.send_response(550, "No such file.", writer)
-        elif param.lower() == "df":
+        if param.lower() == "df":
             properties = statvfs("/")
             fragment_size = properties[1]
             blocks_total = properties[2]
@@ -654,14 +727,16 @@ class FTPdLite:
             df_output = [
                 "Filesystem      Size      Used     Avail   Use%",
                 f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%",
-                "End"
+                "End",
             ]
-            await self.send_response(211, df_output, writer)
+            await self.send_response(211, df_output, session.ctrl_writer)
         else:
-            await self.send_response(504, "Parameter not supported.", writer)
+            await self.send_response(
+                504, "Parameter not supported.", session.ctrl_writer
+            )
         return True
 
-    async def size(self, filepath, writer):
+    async def size(self, filepath, session):
         """
         Given a file path, reply with the number of bytes in the file.
         Defined in RFC-3659.
@@ -670,12 +745,12 @@ class FTPdLite:
         try:
             size = stat(filepath)[6]
         except OSError:
-            await self.send_response(550, "No such file.", writer)
+            await self.send_response(550, "No such file.", session.ctrl_writer)
         else:
-            await self.send_response(213, f"{size}", writer)
+            await self.send_response(213, f"{size}", session.ctrl_writer)
         return True
 
-    async def stat(self, pathname, writer):
+    async def stat(self, pathname, session):
         """
         Report sytem status or existence of file/dir.
 
@@ -699,33 +774,37 @@ class FTPdLite:
                 f"System date: {FTPdLite.date_format(time())}",
                 f"Uptime: {days} days, {hour_pad}{hours}:{mins_pad}{mins}",
                 f"Connected to: {hostname()}",
-                f"Logged in as: {self.username}",
+                f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
-                "End"
+                "End",
             ]
-            await self.send_response(211, server_status, writer)
+            await self.send_response(211, server_status, session.ctrl_writer)
         else:
             try:
                 properties = stat(pathname)
             except OSError:
-                await self.send_response(550, "No such file or directory.", writer)
+                await self.send_response(
+                    550, "No such file or directory.", session.ctrl_writer
+                )
             else:
                 if properties[0] & 0x4000:  # entry is a directory
-                    await self.send_response(213, f"{pathname}", writer)
+                    await self.send_response(213, f"{pathname}", session.ctrl_writer)
                 else:
-                    await self.send_response(211, f"{pathname}", writer)
+                    await self.send_response(211, f"{pathname}", session.ctrl_writer)
         return True
-    
-    async def stor(self, filepath, writer):
+
+    async def stor(self, filepath, session):
         """
         Given a file path, open a data connection and write the incoming
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
         if await self.verify_data_connection() is False:
-            await self.send_response(426, "Data connection closed. Transfer aborted.", writer)
+            await self.send_response(
+                426, "Data connection closed. Transfer aborted.", session.ctrl_writer
+            )
         else:
-            await self.send_response(150, "Transferring file.", writer)
+            await self.send_response(150, "Transferring file.", session.ctrl_writer)
             try:
                 with open(filepath, "wb") as file:
                     while True:
@@ -735,13 +814,15 @@ class FTPdLite:
                         else:
                             break
             except OSError:
-                await self.send_response(451, "Error writing file.", writer)
+                await self.send_response(
+                    451, "Error writing file.", session.ctrl_writer
+                )
             else:
-                await self.send_response(226, "Transfer finished.", writer)
+                await self.send_response(226, "Transfer finished.", session.ctrl_writer)
                 await self.close_data_connection()
         return True
 
-    async def stru(self, param, writer):
+    async def stru(self, param, session):
         """
         Obsolete, but included for compatibility.
 
@@ -752,35 +833,39 @@ class FTPdLite:
             boolean: always True
         """
         if param.upper() == "F":
-            await self.send_response(200, "OK.", writer)
+            await self.send_response(200, "OK.", session.ctrl_writer)
         else:
-            await self.send_response(504, "File structure not supported.", writer)
+            await self.send_response(
+                504, "File structure not supported.", session.ctrl_writer
+            )
         return True
 
-    async def syst(self, _, writer):
+    async def syst(self, _, session):
         """
         Reply to indicate this server follows Unix conventions.
         """
-        await self.send_response(215, "UNIX Type: L8", writer)
+        await self.send_response(215, "UNIX Type: L8", session.ctrl_writer)
         return True
 
-    async def type(self, type, writer):
+    async def type(self, type, session):
         """
         TYPE is implemented to satisfy some clients, but doesn't actually
         do anything to change the translation of end-of-line characters.
         """
         if type.upper() in ("A", "A N", "I", "L 8"):
-            await self.send_response(200, "Always in binary mode.", writer)
+            await self.send_response(200, "Always in binary mode.", session.ctrl_writer)
         else:
-            await self.send_response(504, "Invalid type.", writer)
+            await self.send_response(504, "Invalid type.", session.ctrl_writer)
         return True
 
-    async def user(self, username, writer):
+    async def user(self, username, session):
         """
         Record the username and prompt for a password.
         """
-        self.username = username
-        await self.send_response(331, f"Password required for {self.username}.", writer)
+        session.username = username
+        await self.send_response(
+            331, f"Password required for {username}.", session.ctrl_writer
+        )
         return True
 
     async def verify_data_connection(self):
@@ -824,13 +909,21 @@ class FTPdLite:
         self.data_reader = data_reader
         self.data_writer = data_writer
 
+    async def close_ctrl_connection(self, session):
+        session.ctrl_writer.close()
+        await session.ctrl_writer.wait_closed()
+        session.ctrl_reader.close()
+        await session.ctrl_reader.wait_closed()
+        if self.debug:
+            print(f"Control connection closed for {session.client_ip}")        
+
     async def on_ctrl_connect(self, ctrl_reader, ctrl_writer):
         """
         Handler for control connection. Parses commands to carry out actions.
         """
-        client_ip = ctrl_writer.get_extra_info("peername")[0]
-        if self.debug:
-            print("Control connection from client:", client_ip)
+        client_ip, client_port = ctrl_writer.get_extra_info("peername")
+        print(f"Connection from client: {client_ip}")
+        session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
         await self.send_response(220, self.server_name, ctrl_writer)
         session_still_active = True
         while session_still_active:
@@ -841,15 +934,8 @@ class FTPdLite:
             except KeyError:
                 await self.send_response(502, "Command not implemented.", ctrl_writer)
             else:
-                session_still_active = await func(param, ctrl_writer)
-
-        # End of session
-        ctrl_writer.close()
-        await ctrl_writer.wait_closed()
-        ctrl_reader.close()
-        await ctrl_reader.wait_closed()
-        if self.debug:
-            print(f"Control connection closed for {client_ip}")
+                session_still_active = await func(param, session)
+        self.close_ctrl_connection(session)
 
     def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
         """
