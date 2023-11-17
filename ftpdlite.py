@@ -1,4 +1,15 @@
-### File systems in flight. FTPdLite! ###
+"""
+File systems in flight. FTPdLite!
+(with apologies to Starland Vocal Band)
+
+FTPdLite is a minimalist, mostly RFC 959 compliant, MicroPython FTP
+server for 99% of your microcontroller file transferring needs.
+
+(c)2023 David Horton.
+Released under the BSD-2-Clause license.
+Project site: https://github.com/DavesCodeMusings/ftpdlite
+
+"""
 
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 
@@ -6,6 +17,7 @@ from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 from network import hostname
+from socket import getaddrinfo, AF_INET
 
 
 class Session:
@@ -16,10 +28,12 @@ class Session:
     def __init__(self, client_ip, client_port, ctrl_reader, ctrl_writer):
         self._client_ip = client_ip
         self._client_port = client_port
-        self._login_time = time()
         self._ctrl_reader = ctrl_reader
         self._ctrl_writer = ctrl_writer
+        self._data_reader = None
+        self._data_writer = None
         self._username = None
+        self._login_time = time()
 
     @property
     def client_ip(self):
@@ -30,10 +44,6 @@ class Session:
         return self._client_port
 
     @property
-    def login_time(self):
-        return self._login_time
-
-    @property
     def ctrl_reader(self):
         return self._ctrl_reader
 
@@ -42,12 +52,32 @@ class Session:
         return self._ctrl_writer
 
     @property
+    def data_reader(self):
+        return self._data_reader
+
+    @data_reader.setter
+    def data_reader(self, stream):
+        self._data_reader = stream 
+
+    @property
+    def data_writer(self):
+        return self._data_writer
+
+    @data_writer.setter
+    def data_writer(self, stream):
+        self._data_writer = stream
+
+    @property
     def username(self):
         return self._username
 
     @username.setter
     def username(self, username):
         self._username = username
+
+    @property
+    def login_time(self):
+        return self._login_time
 
 
 class FTPdLite:
@@ -67,6 +97,7 @@ class FTPdLite:
         self.start_time = time()
         self.request_buffer_size = request_buffer_size
         self.pasv_port_pool = list(pasv_port_range)
+        self.session = None
         self.command_dictionary = {
             "CWD": self.cwd,
             "FEAT": self.feat,
@@ -251,7 +282,10 @@ class FTPdLite:
             print(verb)
         else:
             verb = request.split(None, 1)[0].upper()
-            param = request.split(None, 1)[1]
+            try:
+                param = request.split(None, 1)[1]
+            except IndexError:
+                param = ""
             if verb == "PASS":
                 print(verb, "********")
             else:
@@ -380,7 +414,7 @@ class FTPdLite:
                 451, "Unable to read directory.", session.ctrl_writer
             )
         else:
-            if await self.verify_data_connection() is False:
+            if await self.verify_data_connection(session) is False:
                 await self.send_response(
                     426,
                     "Data connection closed. Transfer aborted.",
@@ -391,23 +425,19 @@ class FTPdLite:
                 for entry in dir_entries:
                     properties = stat(dirpath + "/" + entry)
                     if properties[0] & 0x4000:  # entry is a directory
-                        entry += "/"
-                        type = "d"
+                        permissions = "dr-xr-xr-x" if self.readonly else "drwxr-xr-x"
                         size = 0
+                        entry += "/"
                     else:
-                        type = "-"
+                        permissions = "-r--r--r--" if self.readonly else "-rw-r--r--"
                         size = properties[6]
-                    if self.readonly is True:
-                        permissions = "r--r--r--"
-                    else:
-                        permissions = "rw-rw-rw-"
                     uid = "root" if properties[4] == 0 else properties[4]
                     gid = "root" if properties[5] == 0 else properties[5]
                     mtime = FTPdLite.date_format(properties[8])
-                    formatted_entry = f"{type}{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
+                    formatted_entry = f"{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
                     print(formatted_entry)
-                    self.data_writer.write(formatted_entry + "\r\n")
-                await self.data_writer.drain()
+                    self.session.data_writer.write(formatted_entry + "\r\n")
+                await self.session.data_writer.drain()
                 await self.send_response(
                     226, "Directory list sent.", session.ctrl_writer
                 )
@@ -472,7 +502,7 @@ class FTPdLite:
                 451, "Unable to read directory.", session.ctrl_writer
             )
         else:
-            if await self.verify_data_connection() is False:
+            if await self.verify_data_connection(session) is False:
                 await self.send_response(
                     426,
                     "Data connection closed. Transfer aborted.",
@@ -482,7 +512,7 @@ class FTPdLite:
                 await self.send_response(150, dirpath, session.ctrl_writer)
                 print("\n".join(dir_entries))
                 try:
-                    self.data_writer.write("\r\n".join(dir_entries) + "\r\n")
+                    self.session.data_writer.write("\r\n".join(dir_entries) + "\r\n")
                 except OSError:
                     self.send_response(
                         426,
@@ -490,7 +520,7 @@ class FTPdLite:
                         session.ctrl_writer,
                     )
                 else:
-                    await self.data_writer.drain()
+                    await self.session.data_writer.drain()
                     await self.send_response(
                         226, "Directory list sent.", session.ctrl_writer
                     )
@@ -563,6 +593,7 @@ class FTPdLite:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
             return True
         else:
+            await sleep_ms(1000)  # throttle repeated bad attempts
             await self.send_response(
                 430, "Invalid username or password.", session.ctrl_writer
             )
@@ -586,7 +617,7 @@ class FTPdLite:
         port_octet_low = port % 256
         if self.debug:
             print(f"Starting data listener on port: {self.host}:{port}")
-        self.data_listener = await start_server(
+        self.session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
         await self.send_response(
@@ -615,7 +646,7 @@ class FTPdLite:
             port = int(a[4]) * 256 + int(a[5])
             print(f"Opening data connection to: {host}:{port}")
             try:
-                self.data_reader, self.data_writer = await open_connection(host, port)
+                self.session.data_reader, self.session.data_writer = await open_connection(host, port)
             except OSError:
                 await self.send_response(
                     425, "Could not open data connection.", session.ctrl_writer
@@ -670,7 +701,7 @@ class FTPdLite:
         except OSError:
             await self.send_response(550, "No such file.", session.ctrl_writer)
         else:
-            if await self.verify_data_connection() is False:
+            if await self.verify_data_connection(session) is False:
                 await self.send_response(
                     426,
                     "Data connection closed. Transfer aborted.",
@@ -681,8 +712,8 @@ class FTPdLite:
                 try:
                     with open(filepath, "rb") as file:
                         for chunk in FTPdLite.read_file_chunk(file):
-                            self.data_writer.write(chunk)
-                            await self.data_writer.drain()
+                            self.session.data_writer.write(chunk)
+                            await self.session.data_writer.drain()
                 except OSError:
                     await self.send_response(
                         451, "Error reading file.", session.ctrl_writer
@@ -799,7 +830,7 @@ class FTPdLite:
         stream data to the file.
         """
         filepath = FTPdLite.decode_path(filepath)
-        if await self.verify_data_connection() is False:
+        if await self.verify_data_connection(session) is False:
             await self.send_response(
                 426, "Data connection closed. Transfer aborted.", session.ctrl_writer
             )
@@ -808,7 +839,7 @@ class FTPdLite:
             try:
                 with open(filepath, "wb") as file:
                     while True:
-                        chunk = await self.data_reader.read(512)
+                        chunk = await self.session.data_reader.read(512)
                         if chunk:
                             file.write(chunk)
                         else:
@@ -868,36 +899,51 @@ class FTPdLite:
         )
         return True
 
-    async def verify_data_connection(self):
+    async def verify_data_connection(self, session):
         try:
-            self.data_reader
-            self.data_writer  # should exist when data connection is up
+            session.data_reader
+            session.data_writer  # should exist when data connection is up
         except AttributeError:
-            await sleep_ms(100)  # if not, wait and try again
+            await sleep_ms(200)  # if not, wait and try again
         try:
-            self.data_reader
-            self.data_writer
+            session.data_reader
+            session.data_writer
         except AttributeError:
             return False
         else:
             return True
 
     async def close_data_connection(self):
-        self.data_writer.close()
-        await self.data_writer.wait_closed()
-        del self.data_writer
-        self.data_reader.close()
-        await self.data_reader.wait_closed()
-        del self.data_reader
+        if (self.debug):
+            print("Closing data connection...")
         try:
-            self.data_listener
+            self.session.data_writer
         except AttributeError:
-            pass  # No data listener for Active FTP
+            if (self.debug):
+                print("No data writer stream exists to be closed.")
         else:
-            self.data_listener.close()
-            del self.data_listener
-            if self.debug:
-                print("Data connection closed.")
+            self.session.data_writer.close()
+            await self.session.data_writer.wait_closed()
+            self.session.data_writer = None
+        try:
+            self.session.data_reader
+        except AttributeError:
+            if (self.debug):
+                print("No data reader stream exists to be closed.")
+        else:
+            self.session.data_reader.close()
+            await self.session.data_reader.wait_closed()
+            self.session.data_reader = None
+        try:
+            self.session.data_listener
+        except AttributeError:
+            if (self.debug):
+                print("No data listener object exists to be closed.")
+        else:
+            self.session.data_listener.close()
+            self.session.data_listener = None
+        if self.debug:
+            print("Data connection closed.")
 
     async def on_data_connect(self, data_reader, data_writer):
         """
@@ -906,8 +952,8 @@ class FTPdLite:
         client_ip = data_writer.get_extra_info("peername")[0]
         if self.debug:
             print("Data connection from:", client_ip)
-        self.data_reader = data_reader
-        self.data_writer = data_writer
+        self.session.data_reader = data_reader
+        self.session.data_writer = data_writer
 
     async def close_ctrl_connection(self, session):
         session.ctrl_writer.close()
@@ -923,19 +969,29 @@ class FTPdLite:
         """
         client_ip, client_port = ctrl_writer.get_extra_info("peername")
         print(f"Connection from client: {client_ip}")
-        session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
-        await self.send_response(220, self.server_name, ctrl_writer)
-        session_still_active = True
-        while session_still_active:
-            request = await ctrl_reader.read(self.request_buffer_size)
-            verb, param = self.parse_request(request)
-            try:
-                func = self.command_dictionary[verb]
-            except KeyError:
-                await self.send_response(502, "Command not implemented.", ctrl_writer)
-            else:
-                session_still_active = await func(param, session)
-        self.close_ctrl_connection(session)
+        if self.session is not None:
+            await self.send_response(421, "Too many connections.", ctrl_writer)
+        else:
+            self.session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
+            session_active = True  # Becomes False on QUIT or other disconnection event.
+            await self.send_response(220, self.server_name, ctrl_writer)
+            while session_active:
+                try:
+                    request = await ctrl_reader.read(self.request_buffer_size)
+                except OSError:  # Unexpected disconnection.
+                    session_active = False
+                    await self.close_data_connection()
+                    break
+                else:
+                    verb, param = self.parse_request(request)
+                try:
+                    func = self.command_dictionary[verb]
+                except KeyError:
+                    await self.send_response(502, "Command not implemented.", ctrl_writer)
+                else:
+                    session_active = await func(param, self.session)
+            self.close_ctrl_connection(self.session)
+            self.session = None
 
     def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
         """
@@ -953,15 +1009,19 @@ class FTPdLite:
             object: the same loop object given as a parameter or a new
               one if no existing loop was passed
         """
-        self.host = host
-        self.port = port
         self.debug = debug
         now = time()
         jan_1_2023 = mktime((2023, 1, 1, 0, 0, 0, 0, 1))
         if now < jan_1_2023:
             print("WARNING: System clock not set. File timestamps will be incorrect.")
+        addrinfo = getaddrinfo(host, port)[0]
+        if debug:
+            print("getaddrinfo() =", addrinfo)
+        assert addrinfo[0] == AF_INET, "ERROR: This server only supports IPv4."
+        self.host = addrinfo[-1][0]
+        self.port = addrinfo[-1][1]
         print(f"Listening on {self.host}:{self.port}")
         loop = get_event_loop()
-        server = start_server(self.on_ctrl_connect, host, port, 5)
+        server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
         loop.create_task(server)
         loop.run_forever()
