@@ -338,7 +338,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        features = ["Extensions supported:", "SIZE", "END"]
+        features = ["Extensions supported:", "SIZE", "End."]
         await self.send_response(211, features, session.ctrl_writer)
         return True
 
@@ -727,7 +727,7 @@ class FTPdLite:
             df_output = [
                 "Filesystem      Size      Used     Avail   Use%",
                 f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%",
-                "End",
+                "End.",
             ]
             await self.send_response(211, df_output, session.ctrl_writer)
         else:
@@ -776,7 +776,7 @@ class FTPdLite:
                 f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
-                "End",
+                "End.",
             ]
             await self.send_response(211, server_status, session.ctrl_writer)
         else:
