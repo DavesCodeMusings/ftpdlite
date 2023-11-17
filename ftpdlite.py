@@ -57,7 +57,7 @@ class Session:
 
     @data_reader.setter
     def data_reader(self, stream):
-        self._data_reader = stream 
+        self._data_reader = stream
 
     @property
     def data_writer(self):
@@ -327,7 +327,7 @@ class FTPdLite:
 
         Args:
             dirpath (string): a path indicating a directory resource
-            session (object): the FTP client's login session info 
+            session (object): the FTP client's login session info
 
         Returns:
             boolean: always True
@@ -646,7 +646,10 @@ class FTPdLite:
             port = int(a[4]) * 256 + int(a[5])
             print(f"Opening data connection to: {host}:{port}")
             try:
-                self.session.data_reader, self.session.data_writer = await open_connection(host, port)
+                (
+                    self.session.data_reader,
+                    self.session.data_writer,
+                ) = await open_connection(host, port)
             except OSError:
                 await self.send_response(
                     425, "Could not open data connection.", session.ctrl_writer
@@ -914,12 +917,12 @@ class FTPdLite:
             return True
 
     async def close_data_connection(self):
-        if (self.debug):
+        if self.debug:
             print("Closing data connection...")
         try:
             self.session.data_writer
         except AttributeError:
-            if (self.debug):
+            if self.debug:
                 print("No data writer stream exists to be closed.")
         else:
             self.session.data_writer.close()
@@ -928,7 +931,7 @@ class FTPdLite:
         try:
             self.session.data_reader
         except AttributeError:
-            if (self.debug):
+            if self.debug:
                 print("No data reader stream exists to be closed.")
         else:
             self.session.data_reader.close()
@@ -937,7 +940,7 @@ class FTPdLite:
         try:
             self.session.data_listener
         except AttributeError:
-            if (self.debug):
+            if self.debug:
                 print("No data listener object exists to be closed.")
         else:
             self.session.data_listener.close()
@@ -961,7 +964,7 @@ class FTPdLite:
         session.ctrl_reader.close()
         await session.ctrl_reader.wait_closed()
         if self.debug:
-            print(f"Control connection closed for {session.client_ip}")        
+            print(f"Control connection closed for {session.client_ip}")
 
     async def on_ctrl_connect(self, ctrl_reader, ctrl_writer):
         """
@@ -987,7 +990,9 @@ class FTPdLite:
                 try:
                     func = self.command_dictionary[verb]
                 except KeyError:
-                    await self.send_response(502, "Command not implemented.", ctrl_writer)
+                    await self.send_response(
+                        502, "Command not implemented.", ctrl_writer
+                    )
                 else:
                     session_active = await func(param, self.session)
             self.close_ctrl_connection(self.session)
