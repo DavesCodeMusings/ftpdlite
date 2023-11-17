@@ -1,6 +1,6 @@
 """
 File systems in flight. FTPdLite!
-(with apologies to Starland Vocal Band)
+(With apologies to Starland Vocal Band)
 
 FTPdLite is a minimalist, mostly RFC 959 compliant, MicroPython FTP
 server for 99% of your microcontroller file transferring needs.
@@ -436,12 +436,12 @@ class FTPdLite:
                     mtime = FTPdLite.date_format(properties[8])
                     formatted_entry = f"{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
                     print(formatted_entry)
-                    self.session.data_writer.write(formatted_entry + "\r\n")
-                await self.session.data_writer.drain()
+                    session.data_writer.write(formatted_entry + "\r\n")
+                await session.data_writer.drain()
                 await self.send_response(
                     226, "Directory list sent.", session.ctrl_writer
                 )
-                await self.close_data_connection()
+                await self.close_data_connection(session)
         return True
 
     async def mode(self, param, session):
@@ -512,7 +512,7 @@ class FTPdLite:
                 await self.send_response(150, dirpath, session.ctrl_writer)
                 print("\n".join(dir_entries))
                 try:
-                    self.session.data_writer.write("\r\n".join(dir_entries) + "\r\n")
+                    session.data_writer.write("\r\n".join(dir_entries) + "\r\n")
                 except OSError:
                     self.send_response(
                         426,
@@ -520,11 +520,11 @@ class FTPdLite:
                         session.ctrl_writer,
                     )
                 else:
-                    await self.session.data_writer.drain()
+                    await session.data_writer.drain()
                     await self.send_response(
                         226, "Directory list sent.", session.ctrl_writer
                     )
-                    await self.close_data_connection()
+                    await self.close_data_connection(session)
         return True
 
     async def noop(self, _, session):
@@ -617,7 +617,7 @@ class FTPdLite:
         port_octet_low = port % 256
         if self.debug:
             print(f"Starting data listener on port: {self.host}:{port}")
-        self.session.data_listener = await start_server(
+        session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
         await self.send_response(
@@ -647,8 +647,8 @@ class FTPdLite:
             print(f"Opening data connection to: {host}:{port}")
             try:
                 (
-                    self.session.data_reader,
-                    self.session.data_writer,
+                    session.data_reader,
+                    session.data_writer,
                 ) = await open_connection(host, port)
             except OSError:
                 await self.send_response(
@@ -715,8 +715,8 @@ class FTPdLite:
                 try:
                     with open(filepath, "rb") as file:
                         for chunk in FTPdLite.read_file_chunk(file):
-                            self.session.data_writer.write(chunk)
-                            await self.session.data_writer.drain()
+                            session.data_writer.write(chunk)
+                            await session.data_writer.drain()
                 except OSError:
                     await self.send_response(
                         451, "Error reading file.", session.ctrl_writer
@@ -725,7 +725,7 @@ class FTPdLite:
                     await self.send_response(
                         226, "Transfer finished.", session.ctrl_writer
                     )
-                    await self.close_data_connection()
+                    await self.close_data_connection(session)
         return True
 
     async def rmd(self, dirpath, session):
@@ -842,7 +842,7 @@ class FTPdLite:
             try:
                 with open(filepath, "wb") as file:
                     while True:
-                        chunk = await self.session.data_reader.read(512)
+                        chunk = await session.data_reader.read(512)
                         if chunk:
                             file.write(chunk)
                         else:
@@ -853,7 +853,7 @@ class FTPdLite:
                 )
             else:
                 await self.send_response(226, "Transfer finished.", session.ctrl_writer)
-                await self.close_data_connection()
+                await self.close_data_connection(session)
         return True
 
     async def stru(self, param, session):
@@ -916,35 +916,35 @@ class FTPdLite:
         else:
             return True
 
-    async def close_data_connection(self):
+    async def close_data_connection(self, session):
         if self.debug:
             print("Closing data connection...")
         try:
-            self.session.data_writer
+            session.data_writer
         except AttributeError:
             if self.debug:
                 print("No data writer stream exists to be closed.")
         else:
-            self.session.data_writer.close()
-            await self.session.data_writer.wait_closed()
-            self.session.data_writer = None
+            session.data_writer.close()
+            await session.data_writer.wait_closed()
+            session.data_writer = None
         try:
-            self.session.data_reader
+            session.data_reader
         except AttributeError:
             if self.debug:
                 print("No data reader stream exists to be closed.")
         else:
-            self.session.data_reader.close()
-            await self.session.data_reader.wait_closed()
-            self.session.data_reader = None
+            session.data_reader.close()
+            await session.data_reader.wait_closed()
+            session.data_reader = None
         try:
-            self.session.data_listener
+            session.data_listener
         except AttributeError:
             if self.debug:
                 print("No data listener object exists to be closed.")
         else:
-            self.session.data_listener.close()
-            self.session.data_listener = None
+            session.data_listener.close()
+            session.data_listener = None
         if self.debug:
             print("Data connection closed.")
 
@@ -955,6 +955,10 @@ class FTPdLite:
         client_ip = data_writer.get_extra_info("peername")[0]
         if self.debug:
             print("Data connection from:", client_ip)
+
+        # TODO: eliminate reliance on the single self.session
+        # Figure out a way to determine the session object to use
+
         self.session.data_reader = data_reader
         self.session.data_writer = data_writer
 
@@ -983,7 +987,7 @@ class FTPdLite:
                     request = await ctrl_reader.read(self.request_buffer_size)
                 except OSError:  # Unexpected disconnection.
                     session_active = False
-                    await self.close_data_connection()
+                    await self.close_data_connection(self.session)
                     break
                 else:
                     verb, param = self.parse_request(request)
