@@ -18,6 +18,7 @@ from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
+from gc import collect, mem_alloc, mem_free
 
 
 class Session:
@@ -820,11 +821,24 @@ class FTPdLite:
             used_kb = size_kb - avail_kb
             percent_used = round(100 * used_kb / size_kb)
             df_output = [
-                "Filesystem      Size      Used     Avail   Use%",
-                f"flash      {size_kb:8d}K {used_kb:8d}K {avail_kb:8d}K   {percent_used:3d}%",
+                "Filesystem        Size        Used       Avail   Use%",
+                f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
                 "End.",
             ]
             await self.send_response(211, df_output, session.ctrl_writer)
+        elif param.lower() == "free":
+            free = mem_free() // 1024
+            used = mem_alloc() // 1024
+            total = (mem_free() + mem_alloc()) // 1024
+            free_output = [
+                "         Total       Used      Avail",
+                f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
+                "End.",
+            ]
+            await self.send_response(211, free_output, session.ctrl_writer)
+        elif param.lower() == "gc":
+            collect()
+            await self.send_response(211, "OK.", session.ctrl_writer)
         else:
             await self.send_response(
                 504, "Parameter not supported.", session.ctrl_writer
