@@ -33,6 +33,7 @@ class Session:
         self._data_reader = None
         self._data_writer = None
         self._username = None
+        self._working_dir = getcwd()
         self._login_time = time()
 
     @property
@@ -74,6 +75,14 @@ class Session:
     @username.setter
     def username(self, username):
         self._username = username
+
+    @property
+    def cwd(self):
+        return self._working_dir
+
+    @cwd.setter
+    def cwd(self, dirpath):
+        self._working_dir = dirpath
 
     @property
     def login_time(self):
@@ -191,11 +200,12 @@ class FTPdLite:
         return output
 
     @staticmethod
-    def decode_path(path, empty_means_cwd=False):
+    def decode_path(cwd, path, empty_means_cwd=False):
         """
         Given a file or directory path, validate it and return an absolute path.
 
         Args:
+            cwd (string): the user session's current working directory
             path (string): a relative, absolute, or empty path to a resource
             empty_means_cwd (boolean): flag to use CWD in place of empty path
 
@@ -203,9 +213,9 @@ class FTPdLite:
             string: an absolute path to the resource
         """
         if path is None or path == "" and empty_means_cwd is True:
-            absolute_path = getcwd()
+            absolute_path = cwd
         elif path.startswith("/") is False:
-            absolute_path = FTPdLite.path_join(getcwd(), path)
+            absolute_path = FTPdLite.path_join(cwd, path)
         else:
             absolute_path = path
         return absolute_path
@@ -363,13 +373,17 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(dirpath)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
-            chdir(dirpath)
+            properties = stat(dirpath)
         except OSError:
             await self.send_response(550, "No such directory.", session.ctrl_writer)
         else:
-            await self.send_response(250, getcwd(), session.ctrl_writer)
+            if not properties[0] & 0x4000:
+                await self.send_response(550, "Not a directory.", session.ctrl_writer)
+            else:
+                session.cwd = dirpath
+                await self.send_response(250, session.cwd, session.ctrl_writer)
         return True
 
     async def dele(self, filepath, session):
@@ -383,7 +397,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        filepath = FTPdLite.decode_path(filepath)
+        filepath = FTPdLite.decode_path(session.cwd, filepath)
         try:
             remove(filepath)
         except OSError:
@@ -437,7 +451,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -504,7 +518,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(dirpath)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
             mkdir(dirpath)
             await self.send_response(250, f'"{dirpath}"', session.ctrl_writer)
@@ -525,7 +539,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(dirpath, empty_means_cwd=True)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -700,7 +714,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await self.send_response(257, f'"{getcwd()}"', session.ctrl_writer)
+        await self.send_response(257, f'"{session.cwd}"', session.ctrl_writer)
         return True
 
     async def quit(self, _, session):
@@ -729,7 +743,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        filepath = FTPdLite.decode_path(filepath)
+        filepath = FTPdLite.decode_path(session.cwd, filepath)
         try:
             stat(filepath)
         except OSError:
@@ -763,7 +777,7 @@ class FTPdLite:
         """
         Given a directory path, remove the directory. Must be empty.
         """
-        dirpath = FTPdLite.decode_path(dirpath)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
             rmdir(dirpath)
         except OSError:
@@ -806,7 +820,7 @@ class FTPdLite:
         Given a file path, reply with the number of bytes in the file.
         Defined in RFC-3659.
         """
-        filepath = FTPdLite.decode_path(filepath)
+        filepath = FTPdLite.decode_path(session.cwd, filepath)
         try:
             size = stat(filepath)[6]
         except OSError:
@@ -863,7 +877,7 @@ class FTPdLite:
         Given a file path, open a data connection and write the incoming
         stream data to the file.
         """
-        filepath = FTPdLite.decode_path(filepath)
+        filepath = FTPdLite.decode_path(session.cwd, filepath)
         if await self.verify_data_connection(session) is False:
             await self.send_response(
                 426, "Data connection closed. Transfer aborted.", session.ctrl_writer
