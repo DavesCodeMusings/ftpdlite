@@ -14,7 +14,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
-from os import chdir, getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
+from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
@@ -30,8 +30,6 @@ class Session:
         self._client_port = client_port
         self._ctrl_reader = ctrl_reader
         self._ctrl_writer = ctrl_writer
-        self._data_reader = None
-        self._data_writer = None
         self._username = None
         self._working_dir = getcwd()
         self._login_time = time()
@@ -60,6 +58,10 @@ class Session:
     def data_reader(self, stream):
         self._data_reader = stream
 
+    @data_reader.deleter
+    def data_reader(self):
+        del self._data_reader
+
     @property
     def data_writer(self):
         return self._data_writer
@@ -67,6 +69,10 @@ class Session:
     @data_writer.setter
     def data_writer(self, stream):
         self._data_writer = stream
+
+    @data_writer.deleter
+    def data_writer(self):
+        del self._data_writer
 
     @property
     def username(self):
@@ -272,7 +278,7 @@ class FTPdLite:
             if self.session_list[i] == session:
                 if self.debug:
                     print(f"DEBUG: delete_session({session}) = {self.session_list[i]}")
-                del(self.session_list[i])
+                del self.session_list[i]
                 break
 
     async def find_session(self, search_ip):
@@ -436,11 +442,17 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await self.send_response(
-            211,
-            "[FTPdLite](https://github.com/DavesCodeMusings/ftpdlite)",
-            session.ctrl_writer,
-        )
+        commands = sorted(list(self.command_dictionary.keys()))
+        help_output = ["Available commands:"]
+        line = ""
+        for c in range(len(commands)):
+            line += f"{commands[c]:4s}   "
+            if (c + 1) % 10 == 0:
+                help_output.append(line)
+                line = ""
+        help_output.append(line)
+        help_output.append("End.")
+        await self.send_response(211, help_output, session.ctrl_writer)
         return True
 
     async def list(self, dirpath, session):
@@ -856,6 +868,7 @@ class FTPdLite:
                 f"{self.server_name}",
                 f"System date: {FTPdLite.date_format(time())}",
                 f"Uptime: {days} days, {hour_pad}{hours}:{mins_pad}{mins}",
+                f"Number of users: {len(self.session_list)}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
@@ -1001,7 +1014,7 @@ class FTPdLite:
         else:
             session.data_writer.close()
             await session.data_writer.wait_closed()
-            session.data_writer = None
+            del session.data_writer
         try:
             session.data_reader
         except AttributeError:
@@ -1010,7 +1023,7 @@ class FTPdLite:
         else:
             session.data_reader.close()
             await session.data_reader.wait_closed()
-            session.data_reader = None
+            del session.data_reader
         try:
             session.data_listener
         except AttributeError:
@@ -1019,7 +1032,7 @@ class FTPdLite:
         else:
             session.data_listener.close()
             await session.data_listener.wait_closed()
-            session.data_listener = None
+            del session.data_listener
         if self.debug:
             print("DEBUG: Data connection closed.")
 
