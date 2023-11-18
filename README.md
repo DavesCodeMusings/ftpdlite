@@ -46,7 +46,7 @@ FTPdLite works best with command-line clients.
 
 ## Caveats
 FTPdLite is a total alpha-quality product at the moment.
-* It's not multi-user capable. Even the same user on multiple simultaneous client connections is flaky.
+* It's not multi-user capable. Limited to one login session per client IP address.
 * MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
 * Does not play well with GUI clients (FileZilla, WinSCP, etc.) Not sure why. It's on the to-do list.
 
