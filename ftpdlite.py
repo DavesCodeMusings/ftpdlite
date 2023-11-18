@@ -97,7 +97,7 @@ class FTPdLite:
         self.start_time = time()
         self.request_buffer_size = request_buffer_size
         self.pasv_port_pool = list(pasv_port_range)
-        self.session = None
+        self.session_list = []
         self.command_dictionary = {
             "CWD": self.cwd,
             "FEAT": self.feat,
@@ -249,7 +249,38 @@ class FTPdLite:
             else:  # empty chunk means end of the file
                 return
 
-    def get_pasv_port(self):
+    async def delete_session(self, session):
+        """
+        Given a session object, delete is from the server's session list.
+
+        Args:
+            session (object): the client IP of interest
+
+        Returns: nothing
+        """
+        for i in range(len(self.session_list)):
+            if self.session_list[i] == session:
+                del(self.session_list[i])
+                break
+
+    async def find_session(self, search_ip):
+        """
+        Given a client IP address, find the associated session.
+
+        Args:
+            search_ip (string): the client IP of interest
+
+        Returns:
+            object: the Session object with the associated client_ip
+        """
+        for s in self.session_list:
+            if s.client_ip == search_ip:
+                break
+        else:
+            s = None
+        return s
+
+    async def get_pasv_port(self):
         """
         Get a TCP port number from the pool, then rotate the list to ensure
         it won't be used again for a while. Helps avoid address in use error.
@@ -261,7 +292,7 @@ class FTPdLite:
         self.pasv_port_pool.append(port)
         return port
 
-    def parse_request(self, req_buffer):
+    async def parse_request(self, req_buffer):
         """
         Given a line of input, split the command into a verb and parameter.
 
@@ -612,7 +643,7 @@ class FTPdLite:
             boolean: always True
         """
         host_octets = self.host.replace(".", ",")
-        port = self.get_pasv_port()
+        port = await self.get_pasv_port()
         port_octet_high = port // 256
         port_octet_low = port % 256
         if self.debug:
@@ -895,6 +926,14 @@ class FTPdLite:
     async def user(self, username, session):
         """
         Record the username and prompt for a password.
+
+        Args:
+            username (string): the USER presented at the login prompt
+            session (object): info about the client session, including streams
+
+        Returns:
+            boolean: always True
+
         """
         session.username = username
         await self.send_response(
@@ -903,6 +942,15 @@ class FTPdLite:
         return True
 
     async def verify_data_connection(self, session):
+        """
+        Ensure the data connection is ready before data is sent
+
+        Args:
+            session (object): info about the client session, including streams
+
+        Returns:
+            boolean: True if connction is ready, False if not
+        """
         try:
             session.data_reader
             session.data_writer  # should exist when data connection is up
@@ -917,6 +965,14 @@ class FTPdLite:
             return True
 
     async def close_data_connection(self, session):
+        """
+        Close data connection streams and remove them from the session.
+
+        Args:
+            session (object): info about the client session, including streams
+
+        Returns: nothing
+        """
         if self.debug:
             print("Closing data connection...")
         try:
@@ -944,6 +1000,7 @@ class FTPdLite:
                 print("No data listener object exists to be closed.")
         else:
             session.data_listener.close()
+            await session.data_listener.wait_closed()
             session.data_listener = None
         if self.debug:
             print("Data connection closed.")
@@ -951,18 +1008,30 @@ class FTPdLite:
     async def on_data_connect(self, data_reader, data_writer):
         """
         Handler for PASV data connections. Remember the streams for later commands.
+
+        Args:
+            data_reader (stream): files uploaded from the client
+            data_writer (stream): files/data requested by the client
         """
-        client_ip = data_writer.get_extra_info("peername")[0]
+        client_ip, client_port = data_writer.get_extra_info("peername")
         if self.debug:
-            print("Data connection from:", client_ip)
+            print(f"Data connection from: {client_ip}:{client_port}")
 
-        # TODO: eliminate reliance on the single self.session
-        # Figure out a way to determine the session object to use
-
-        self.session.data_reader = data_reader
-        self.session.data_writer = data_writer
+        session = await self.find_session(client_ip)
+        if self.debug:
+            print(session)
+        session.data_reader = data_reader
+        session.data_writer = data_writer
 
     async def close_ctrl_connection(self, session):
+        """
+        Close the control channel streams.
+
+        Args:
+            session (object): info about the client session, including streams
+
+        Returns: nothing
+        """
         session.ctrl_writer.close()
         await session.ctrl_writer.wait_closed()
         session.ctrl_reader.close()
@@ -973,13 +1042,23 @@ class FTPdLite:
     async def on_ctrl_connect(self, ctrl_reader, ctrl_writer):
         """
         Handler for control connection. Parses commands to carry out actions.
+
+        Args:
+            ctrl_reader (stream): incoming commands from the client
+            ctrl_writer (stream): replies from the server to the client
+
+        Returns: nothing
         """
         client_ip, client_port = ctrl_writer.get_extra_info("peername")
         print(f"Connection from client: {client_ip}")
-        if self.session is not None:
+        if (
+            len(self.session_list) > 10
+            or await self.find_session(client_ip) is not None
+        ):
             await self.send_response(421, "Too many connections.", ctrl_writer)
         else:
-            self.session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
+            session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
+            self.session_list.append(session)
             session_active = True  # Becomes False on QUIT or other disconnection event.
             await self.send_response(220, self.server_name, ctrl_writer)
             while session_active:
@@ -987,10 +1066,10 @@ class FTPdLite:
                     request = await ctrl_reader.read(self.request_buffer_size)
                 except OSError:  # Unexpected disconnection.
                     session_active = False
-                    await self.close_data_connection(self.session)
+                    await self.close_data_connection(session)
                     break
                 else:
-                    verb, param = self.parse_request(request)
+                    verb, param = await self.parse_request(request)
                 try:
                     func = self.command_dictionary[verb]
                 except KeyError:
@@ -998,9 +1077,10 @@ class FTPdLite:
                         502, "Command not implemented.", ctrl_writer
                     )
                 else:
-                    session_active = await func(param, self.session)
-            self.close_ctrl_connection(self.session)
-            self.session = None
+                    session_active = await func(param, session)
+            self.close_ctrl_connection(session)
+            await self.delete_session(session)
+            session = None
 
     def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
         """
