@@ -13,6 +13,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 
 # Many thanks to:
 # D.J. Bernstein https://cr.yp.to/ftp.html for a clear explanation of FTP.
+# Peter Hinch (peterhinch) for the proper `await start_server()`` pattern.
 # Robert Hammelrath (robert-hh) for providing the proper PASV response.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
