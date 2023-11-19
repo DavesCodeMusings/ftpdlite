@@ -1111,6 +1111,7 @@ class FTPdLite:
                 try:
                     request = await ctrl_reader.read(self.request_buffer_size)
                 except OSError:  # Unexpected disconnection.
+                    print("ERROR: Control connection closed unexpectedly.")
                     session_active = False
                     await self.close_data_connection(session)
                     break
