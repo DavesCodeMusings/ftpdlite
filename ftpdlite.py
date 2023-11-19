@@ -120,6 +120,7 @@ class FTPdLite:
         self.command_dictionary = {
             "CDUP": self.cdup,
             "CWD": self.cwd,
+            "EPSV": self.epsv,
             "FEAT": self.feat,
             "HELP": self.help,
             "LIST": self.list,
@@ -448,6 +449,30 @@ class FTPdLite:
             await self.send_response(550, "No such file.", session.ctrl_writer)
         else:
             await self.send_response(250, "OK.", session.ctrl_writer)
+        return True
+
+    async def epsv(self, _, session):
+        """
+        Start a new data listener on one of the high numbered ports and
+        report back to the client. Similar to PASV, but with a different
+        response format. RFC-2428
+
+        Args:
+            _ (discard): command does not take parameters
+            session (object): the FTP client's login session info
+
+        Returns:
+            boolean: always True
+        """
+        port = await self.get_pasv_port()
+        if self.debug:
+            print(f"DEBUG: Starting data listener on port: {port}")
+        session.data_listener = await start_server(
+            self.on_data_connect, self.host, port, 1
+        )
+        await self.send_response(
+            229, f"Entering extended passive mode. (|||{port}|)", session.ctrl_writer
+        )
         return True
 
     async def feat(self, _, session):
@@ -840,9 +865,10 @@ class FTPdLite:
 
     async def site(self, param, session):
         """
-        RFC959 specifies SITE as a way to access services not defined
+        RFC-959 specifies SITE as a way to access services not defined
         in the common set of FTP commands. This server offers the Unix-
-        style `df` command as a way to show file system utilization.
+        style `df` and `free` commands as well as MicroPython-specific
+        forced garbage collection.
         """
         if param.lower() == "df":
             df_output = await FTPdLite.site_df()
@@ -1105,7 +1131,6 @@ class FTPdLite:
         client_ip, client_port = data_writer.get_extra_info("peername")
         if self.debug:
             print(f"DEBUG: Data connection from: {client_ip}:{client_port}")
-
         session = await self.find_session(client_ip)
         session.data_reader = data_reader
         session.data_writer = data_writer
@@ -1173,7 +1198,7 @@ class FTPdLite:
             await self.delete_session(session)
             session = None
 
-    def run(self, host="0.0.0.0", port=21, loop=None, debug=False):
+    def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
         """
         Start an asynchronous listener for FTP requests.
 
