@@ -39,9 +39,10 @@ py -m mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
 ```
 
 ## Supported Clients
-FTPdLite works best with command-line clients.
+FTPdLite works best with these clients:
 * The _tnftp_ package on Linux provides an outstanding FTP experience.
-* Windows _ftp.exe_ works, but has a limited command set and no PASV mode presents a problem for firewalls.
+* FileZilla (with simultaneous connections set to 1) is the go-to choice for Windows.
+* Windows _ftp.exe_ works, but has a limited command set and its lack of PASV mode presents a problem for firewalls.
 * For non-interactive transfers, _wget_ works well, as does _curl_.
 
 ## Caveats
