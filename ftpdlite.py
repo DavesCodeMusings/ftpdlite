@@ -812,29 +812,10 @@ class FTPdLite:
         style `df` command as a way to show file system utilization.
         """
         if param.lower() == "df":
-            properties = statvfs("/")
-            fragment_size = properties[1]
-            blocks_total = properties[2]
-            blocks_available = properties[4]
-            size_kb = int(blocks_total * fragment_size / 1024)
-            avail_kb = int(blocks_available * fragment_size / 1024)
-            used_kb = size_kb - avail_kb
-            percent_used = round(100 * used_kb / size_kb)
-            df_output = [
-                "Filesystem        Size        Used       Avail   Use%",
-                f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
-                "End.",
-            ]
+            df_output = await FTPdLite.site_df()
             await self.send_response(211, df_output, session.ctrl_writer)
         elif param.lower() == "free":
-            free = mem_free() // 1024
-            used = mem_alloc() // 1024
-            total = (mem_free() + mem_alloc()) // 1024
-            free_output = [
-                "         Total       Used      Avail",
-                f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
-                "End.",
-            ]
+            free_output = await FTPdLite.site_free()
             await self.send_response(211, free_output, session.ctrl_writer)
         elif param.lower() == "gc":
             collect()
@@ -844,6 +825,35 @@ class FTPdLite:
                 504, "Parameter not supported.", session.ctrl_writer
             )
         return True
+
+    @staticmethod
+    async def site_df():
+        properties = statvfs("/")
+        fragment_size = properties[1]
+        blocks_total = properties[2]
+        blocks_available = properties[4]
+        size_kb = int(blocks_total * fragment_size / 1024)
+        avail_kb = int(blocks_available * fragment_size / 1024)
+        used_kb = size_kb - avail_kb
+        percent_used = round(100 * used_kb / size_kb)
+        output = [
+            "Filesystem        Size        Used       Avail   Use%",
+            f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
+            "End.",
+        ]
+        return output
+
+    @staticmethod
+    async def site_free():
+        free = mem_free() // 1024
+        used = mem_alloc() // 1024
+        total = (mem_free() + mem_alloc()) // 1024
+        output = [
+            "         Total       Used      Avail",
+            f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
+            "End.",
+        ]
+        return output
 
     async def size(self, filepath, session):
         """
