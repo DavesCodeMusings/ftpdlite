@@ -1173,7 +1173,7 @@ class FTPdLite:
             await self.delete_session(session)
             session = None
 
-    def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
+    def run(self, host="0.0.0.0", port=21, loop=None, debug=False):
         """
         Start an asynchronous listener for FTP requests.
 
