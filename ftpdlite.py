@@ -11,7 +11,9 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 
 """
 
-# Many thanks to https://cr.yp.to/ftp.html for a clear explanation of FTP.
+# Many thanks to:
+# D.J. Bernstein https://cr.yp.to/ftp.html for a clear explanation of FTP.
+# Robert Hammelrath (robert-hh) for providing the proper PASV response.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
@@ -115,6 +117,7 @@ class FTPdLite:
         self.pasv_port_pool = list(pasv_port_range)
         self.session_list = []
         self.command_dictionary = {
+            "CDUP": self.cdup,
             "CWD": self.cwd,
             "FEAT": self.feat,
             "HELP": self.help,
@@ -355,23 +358,49 @@ class FTPdLite:
             writer (stream): the FTP client's control connection
 
         Returns:
-            nothing
+            boolean: True if stream writer was up, false if not
         """
-        if code == 250 and msg is None:
-            msg = "OK."
-        elif isinstance(msg, str):  # single line
+        success = True
+        if isinstance(msg, str):  # single line
             print(f"{code} {msg}")
-            writer.write(f"{code} {msg}\r\n")
+            try:
+                writer.write(f"{code} {msg}\r\n")
+                await writer.drain()
+            except OSError:  # Connection closed unexpectedly.
+                success = False
         elif isinstance(msg, list):  # multi-line, dashes after code
             for line in range(len(msg) - 1):
                 print(f"{code}-{msg[line]}")
-                writer.write(f"{code}-{msg[line]}\r\n")
+                try:
+                    writer.write(f"{code}-{msg[line]}\r\n")
+                except OSError:
+                    success = False
+                    break
             print(f"{code} {msg[-1]}")
-            writer.write(f"{code} {msg[-1]}\r\n")  # last line, no dash
-        await writer.drain()
+            try:
+                writer.write(f"{code} {msg[-1]}\r\n")  # last line, no dash
+                await writer.drain()
+            except OSError:
+                success = False
+        return success
 
     # Each command function below returns a boolean to indicate if session
     # should be maintained (True) or ended (False.) Most return True.
+
+    async def cdup(self, _, session):
+        """
+        Go up a directory level (just like `cd ..` would do.)
+
+        Args:
+            _ (discard): does not take parameters
+            session (object): the FTP client's login session info
+
+        Returns:
+            boolean: always True
+        """
+        session.cwd = session.cwd.rsplit("/", 1)[0] or "/"
+        await self.send_response(250, session.cwd, session.ctrl_writer)
+        return True
 
     async def cwd(self, dirpath, session):
         """
@@ -684,7 +713,7 @@ class FTPdLite:
         )
         await self.send_response(
             227,
-            f"Entering passive mode ={host_octets},{port_octet_high},{port_octet_low}",
+            f"Entering passive mode. ({host_octets},{port_octet_high},{port_octet_low})",
             session.ctrl_writer,
         )
         return True
@@ -1053,6 +1082,7 @@ class FTPdLite:
         except AttributeError:
             if self.debug:
                 print("DEBUG: No data listener object exists to be closed.")
+                print("DEBUG: This is normal for PORT transfers.")
         else:
             session.data_listener.close()
             await session.data_listener.wait_closed()
