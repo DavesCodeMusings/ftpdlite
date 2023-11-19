@@ -14,7 +14,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # Many thanks to:
 # D.J. Bernstein https://cr.yp.to/ftp.html for a clear explanation of FTP.
 # Peter Hinch (peterhinch) for the proper `await start_server()`` pattern.
-# Robert Hammelrath (robert-hh) for providing the proper PASV response.
+# Robert Hammelrath (robert-hh) for assistance with FileZilla compatibility.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
@@ -327,11 +327,14 @@ class FTPdLite:
         Returns:
             verb, param (tuple): action and related parameter string
         """
-        request = req_buffer.decode("utf-8").rstrip("\r\n")
-        if len(request) == 0:
-            verb = None
+        try:
+            request = req_buffer.decode("utf-8").rstrip("\r\n")
+        except OSError:
+            request = None
+        if request is None or len(request) == 0:
+            verb = "QUIT"  # Filezilla doesn't send QUIT, just NULL.
             param = None
-            print("[null]")
+            print("Received NULL command. Interpreting as QUIT.")
         elif " " not in request:
             verb = request.upper()
             param = None
