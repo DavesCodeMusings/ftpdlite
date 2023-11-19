@@ -15,7 +15,7 @@ FTP is one of the earliest internet protocols. It's a security nightmare, but it
 >Plus, There's only about nine and a half hours of daylight this time of year. I need something to keep my sanity.
 
 ## What else is there?
-It's probably got bugs I don't know about, but for the case of a single user uploading and downloading files, it works. I haven't gotten it to play well with GUI clients like Filezilla yet, but _curl_ and _wget_ work and it's pretty fabulous with a modern command-line client like _tnftp_. (Windoze _ftp.exe_ works too, but not behind a firewall.)
+It's probably got bugs I don't know about, but for the case of a single user uploading and downloading files, it works. Tested clients include: FileZilla (with simultaneous connections limited to 1), _curl_, _wget_, and  _tnftp_. (Windoze _ftp.exe_ works too, but not behind a firewall.)
 
 Using asyncio means it does handle multiple sessions, but only one session per client IP address. And it only supports a single account username/password. So still limited in some ways.
 
