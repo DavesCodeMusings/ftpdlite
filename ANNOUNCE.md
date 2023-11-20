@@ -17,7 +17,7 @@ FTP is one of the earliest internet protocols. It's a security nightmare, but it
 ## What else is there?
 It's probably got bugs I don't know about, but for the case of a single user uploading and downloading files, it works. Tested clients include: _FileZilla_ (with simultaneous connections set to 1), _curl_, _wget_, and  _tnftp_. (Windoze _ftp.exe_ works too, but not behind a firewall.)
 
-Using asyncio means it does handle multiple sessions, but only one session per client IP address. And it only supports a single account username/password. So still limited in some ways.
+Using asyncio means it does handle multiple sessions, but only one session per client IP address. So still limited in some ways.
 
 There are some extra features built into the SITE command. Together with the _tnftp_ client's extra commands, it makes for a rather sublime remote file management experience. The sample session below demonstrates some of the functionality.
 
