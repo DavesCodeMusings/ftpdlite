@@ -1,8 +1,8 @@
 """
-File systems in flight. FTPdLite!
+File systems in flight... FTPdLite!
 (With apologies to Starland Vocal Band)
 
-FTPdLite is a minimalist, mostly RFC 959 compliant, MicroPython FTP
+FTPdLite is a minimalist, mostly RFC-959 compliant, MicroPython FTP
 server for 99% of your microcontroller file transferring needs.
 
 (c)2023 David Horton.
@@ -141,6 +141,7 @@ class FTPdLite:
             "SYST": self.syst,
             "TYPE": self.type,
             "USER": self.user,
+            "XCUP": self.cdup,
             "XCWD": self.cwd,
             "XPWD": self.pwd,
         }
@@ -180,6 +181,7 @@ class FTPdLite:
             string: date and time suitable for `ls -l` output.
         """
         months = [
+            "",
             "Jan",
             "Feb",
             "Mar",
@@ -194,7 +196,7 @@ class FTPdLite:
             "Dec",
         ]
         datetime = localtime(timestamp)
-        mon = months[datetime[1] - 1]
+        mon = months[datetime[1]]
         day = datetime[2]
         day_pad = " " if day < 10 else ""
         year = datetime[0]
@@ -395,6 +397,7 @@ class FTPdLite:
     async def cdup(self, _, session):
         """
         Go up a directory level (just like `cd ..` would do.)
+        RFC-959 specifies as CDUP, RFC-775 specifies as XCUP
 
         Args:
             _ (discard): does not take parameters
@@ -410,6 +413,7 @@ class FTPdLite:
     async def cwd(self, dirpath, session):
         """
         Change working directory.
+        RFC-959 specifies as CWD, RFC-775 specifies as XCwD
 
         Args:
             dirpath (string): a path indicating a directory resource
@@ -428,7 +432,11 @@ class FTPdLite:
                 await self.send_response(550, "Not a directory.", session.ctrl_writer)
             else:
                 session.cwd = dirpath
-                await self.send_response(250, session.cwd, session.ctrl_writer)
+                await self.send_response(
+                    250,
+                    f"Working directory changed to: {session.cwd}",
+                    session.ctrl_writer,
+                )
         return True
 
     async def dele(self, filepath, session):
@@ -506,7 +514,7 @@ class FTPdLite:
         line = ""
         for c in range(len(commands)):
             line += f"{commands[c]:4s}   "
-            if (c + 1) % 10 == 0:
+            if (c + 1) % 9 == 0:
                 help_output.append(line)
                 line = ""
         help_output.append(line)
@@ -541,7 +549,9 @@ class FTPdLite:
                     session.ctrl_writer,
                 )
             else:
-                await self.send_response(150, dirpath, session.ctrl_writer)
+                await self.send_response(
+                    150, f"Contents of: {dirpath}", session.ctrl_writer
+                )
                 for entry in dir_entries:
                     properties = stat(dirpath + "/" + entry)
                     if properties[0] & 0x4000:  # entry is a directory
@@ -585,6 +595,7 @@ class FTPdLite:
     async def mkd(self, dirpath, session):
         """
         Given a path, create a new directory.
+        RFC-959 specifies MKD, RFC-775 specifies XMKD
 
         Args:
             dirpath (string): a path indicating the directory resource
@@ -596,7 +607,9 @@ class FTPdLite:
         dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
             mkdir(dirpath)
-            await self.send_response(250, f'"{dirpath}"', session.ctrl_writer)
+            await self.send_response(
+                257, f'"{dirpath}" directory created.', session.ctrl_writer
+            )
         except OSError:
             await self.send_response(
                 550, "Failed to create directory.", session.ctrl_writer
@@ -629,7 +642,9 @@ class FTPdLite:
                     session.ctrl_writer,
                 )
             else:
-                await self.send_response(150, dirpath, session.ctrl_writer)
+                await self.send_response(
+                    150, f"Contents of: {dirpath}", session.ctrl_writer
+                )
                 print("\n".join(dir_entries))
                 try:
                     session.data_writer.write("\r\n".join(dir_entries) + "\r\n")
@@ -781,6 +796,7 @@ class FTPdLite:
     async def pwd(self, _, session):
         """
         Report back with the current working directory.
+        RFC-959 specifies as PWD, RFC-775 specifies as XPWD
 
         Args:
             _ (discard): command does not take parameters
@@ -851,6 +867,7 @@ class FTPdLite:
     async def rmd(self, dirpath, session):
         """
         Given a directory path, remove the directory. Must be empty.
+        RFC-959 specifies as RKD, RFC-775 specifies as XRKD
         """
         dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
