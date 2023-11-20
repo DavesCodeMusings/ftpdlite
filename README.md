@@ -18,13 +18,22 @@ main.py
 ```
 from ftpdlite import FTPdLite
 
+wifi_ip_address = wlan.ifconfig()[0]
 server = FTPdLite()
-server.credentials = ["ftp:ftp"]            # Replace the default username/password
-server.credentials.append("anonymous:ftp")  # Add another username/password
-server.run(host=wlan.ifconfig()[0])
+server.add_credential("root:root:0:0:Super User:/:/bin/nologin")
+server.add_credential("Felicia:Friday")
+server.add_credential("ftp:ftp")
+
+server.run(host=wifi_ip_address, debug=True)
+
 ```
 
-Change the server.credentials to something that makes sense to you. Default credentials are _Felicia:Friday_ <sup>[1](https://en.wikipedia.org/wiki/Angela_Means)</sup>
+Add server.credentials for whatever users make sense to you. `add_credential()` will take either htpasswd-style or Unix-style password entries. There are a few things to keep in mind:
+
+* Some commands, like `site reboot`, are only authorized for an account with a group id of 0. (That's the second 0 in _root:root:0:0:Super User:/:/bin/nologin_)
+* The Unix-style GECOS, home, and login shell fields are just place holders. They have no effect on anything.
+* Password encryption is not supported yet.
+* **There are no defaults user accounts. You must add at least one credential or you can't log in.**
 
 Boot your microcontroller and point your FTP client to port 21.
 
