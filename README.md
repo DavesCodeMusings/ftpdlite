@@ -19,12 +19,12 @@ main.py
 from ftpdlite import FTPdLite
 
 server = FTPdLite()
-server.credentials = ["ftp:ftp"]             # Replaces the default username/password
-server.credentials.append("anonymouns:ftp")  # Adds another username/password
+server.credentials = ["ftp:ftp"]            # Replace the default username/password
+server.credentials.append("anonymous:ftp")  # Add another username/password
 server.run(host=wlan.ifconfig()[0])
 ```
 
-Change the server.credentials to something that makes sense to you. Default credentials are _Felicia:Friday_
+Change the server.credentials to something that makes sense to you. Default credentials are _Felicia:Friday_ <sup>[1](https://en.wikipedia.org/wiki/Angela_Means)</sup>
 
 Boot your microcontroller and point your FTP client to port 21.
 
