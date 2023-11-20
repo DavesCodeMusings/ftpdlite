@@ -28,6 +28,8 @@ server.run(host=wifi_ip_address, debug=True)
 
 ```
 
+If you want people to be able to upload files and make directories, pay attention to the _readonly=False_ part of `server = FTPdLite(readonly=False)` default behavior is readonly mode.
+
 Add server.credentials for whatever users make sense to you. `add_credential()` will take either htpasswd-style or Unix-style password entries. There are a few things to keep in mind:
 
 * Some commands, like `site reboot`, are only authorized for an account with a group id of 0. (That's the second 0 in _root:root:0:0:Super User:/:/bin/nologin_)
