@@ -19,7 +19,7 @@ main.py
 from ftpdlite import FTPdLite
 
 wifi_ip_address = wlan.ifconfig()[0]
-server = FTPdLite()
+server = FTPdLite(readonly=False)
 server.add_credential("root:root:0:0:Super User:/:/bin/nologin")
 server.add_credential("Felicia:Friday")
 server.add_credential("ftp:ftp")
