@@ -534,6 +534,8 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
+        if dirpath == "-a":  # Ignore non-compliant data from GNOME Virtual FileSystem
+            dirpath = ""
         dirpath = FTPdLite.decode_path(session.cwd, dirpath, empty_means_cwd=True)
         try:
             dir_entries = listdir(dirpath)
