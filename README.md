@@ -14,7 +14,6 @@ First, read up on how insecure FTP is. Then, if you still want to do it...
 
 Download ftpdlite.py and put it in your MicroPython device's /lib directory (or see below for MIP install.) Then run FTPdLite from main.py like the example shown below. You'll also need a boot.py to get your device on the network and set the time.
 
-main.py
 ```
 from ftpdlite import FTPdLite
 
@@ -25,8 +24,8 @@ server.add_credential("Felicia:Friday")
 server.add_credential("ftp:ftp")
 
 server.run(host=wifi_ip_address, debug=True)
-
 ```
+_Figure 1: main.py_
 
 If you want people to be able to upload files and make directories, pay attention to the _readonly=False_ part of `server = FTPdLite(readonly=False)` default behavior is readonly mode.
 
