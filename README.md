@@ -14,7 +14,7 @@ First, read up on how insecure FTP is. Then, if you still want to do it...
 
 Download ftpdlite.py and put it in your MicroPython device's /lib directory (or see below for MIP install.) Then run FTPdLite from main.py like the example shown below.
 
->You'll also need a boot.py to get your device on the network and set the time.
+>You'll also need a boot.py to get your device connected to the network and set the time with NTP.
 
 ```
 from ftpdlite import FTPdLite
