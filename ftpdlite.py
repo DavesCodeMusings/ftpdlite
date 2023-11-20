@@ -111,7 +111,7 @@ class FTPdLite:
         request_buffer_size=512,
     ):
         self.server_name = "FTPdLite (MicroPython)"
-        self.credentials = "Felicia:Friday"
+        self.credentials = ["Felicia:Friday"]
         self.readonly = readonly
         self.start_time = time()
         self.request_buffer_size = request_buffer_size
@@ -718,21 +718,31 @@ class FTPdLite:
         Returns:
             boolean: True if login succeeded, False if not
         """
-        if self.debug:
-            print("DEBUG: Expecting:", self.credentials)
-            print(f"DEBUG: Got: {session.username}:{password}")
-        if (
-            session.username == self.credentials.split(":", 1)[0]
-            and password == self.credentials.split(":", 1)[1]
-        ):
-            await self.send_response(230, "Login successful.", session.ctrl_writer)
-            return True
+        for stored_credential in self.credentials:
+            if stored_credential.startswith(session.username + ":"):
+                break
         else:
+            print("User not found:", session.username)
             await sleep_ms(1000)  # throttle repeated bad attempts
             await self.send_response(
                 430, "Invalid username or password.", session.ctrl_writer
             )
             return False
+        if self.debug:
+            print("DEBUG: Expecting:", stored_credential)
+            print(f"DEBUG: Got: {session.username}:{password}")
+        if (
+            session.username != stored_credential.split(":", 1)[0]
+            or password != stored_credential.split(":", 1)[1]
+        ):
+            await sleep_ms(1000)
+            await self.send_response(
+                430, "Invalid username or password.", session.ctrl_writer
+            )
+            return False
+        else:
+            await self.send_response(230, "Login successful.", session.ctrl_writer)
+            return True
 
     async def pasv(self, _, session):
         """
