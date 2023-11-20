@@ -960,14 +960,13 @@ class FTPdLite:
             days = seconds // 86400
             seconds = seconds % 86400
             hours = seconds // 3600
-            hour_pad = "0" if hours < 10 else ""
             seconds = seconds % 3600
             mins = seconds // 60
             mins_pad = "0" if mins < 10 else ""
             server_status = [
                 f"{self.server_name}",
                 f"System date: {FTPdLite.date_format(time())}",
-                f"Uptime: {days} days, {hour_pad}{hours}:{mins_pad}{mins}",
+                f"Uptime: {days} days, {hours}:{mins_pad}{mins}",
                 f"Number of users: {len(self.session_list)}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
