@@ -19,7 +19,8 @@ main.py
 from ftpdlite import FTPdLite
 
 server = FTPdLite()
-server.credentials = "username:password"
+server.credentials = ["ftp:ftp"]             # Replaces the default username/password
+server.credentials.append("anonymouns:ftp")  # Adds another username/password
 server.run(host=wlan.ifconfig()[0])
 ```
 
