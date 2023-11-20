@@ -22,6 +22,7 @@ from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
 from gc import collect, mem_alloc, mem_free
+from machine import reset
 
 
 class Session:
@@ -35,6 +36,8 @@ class Session:
         self._ctrl_reader = ctrl_reader
         self._ctrl_writer = ctrl_writer
         self._username = None
+        self._uid = None
+        self._gid = None
         self._working_dir = getcwd()
         self._login_time = time()
 
@@ -106,12 +109,12 @@ class FTPdLite:
 
     def __init__(
         self,
-        readonly=False,
+        readonly=True,
         pasv_port_range=range(49152, 49407),
         request_buffer_size=512,
     ):
         self.server_name = "FTPdLite (MicroPython)"
-        self.credentials = ["Felicia:Friday"]
+        self._credentials = []
         self.readonly = readonly
         self.start_time = time()
         self.request_buffer_size = request_buffer_size
@@ -273,9 +276,29 @@ class FTPdLite:
             else:  # empty chunk means end of the file
                 return
 
+    def add_credential(self, credential):
+        """
+        Given a username/password entry in the style of Apache htpasswd or
+        Unix /etc/passwd, add the credential to the list accepted by this
+        server.
+
+        Args:
+            credential (string): either 'username:password' or the Unix-
+                style 'username:password:uid:gid:gecos:home:shell'
+
+        Returns:
+            True if credential format was acceptable, False if not.
+        """
+        if credential.count(":") != 1 and credential.count(":") != 6:
+            print("Invalid credential string.")
+            return False
+        else:
+            self._credentials.append(credential)
+            return True
+
     async def delete_session(self, session):
         """
-        Given a session object, delete is from the server's session list.
+        Given a session object, delete it from the server's session list.
 
         Args:
             session (object): the client IP of interest
@@ -285,7 +308,9 @@ class FTPdLite:
         for i in range(len(self.session_list)):
             if self.session_list[i] == session:
                 if self.debug:
-                    print(f"DEBUG: delete_session({session}) = {self.session_list[i]}")
+                    print(
+                        f"DEBUG: delete_session({session}) deleted: {self.session_list[i]}"
+                    )
                 del self.session_list[i]
                 break
 
@@ -441,7 +466,7 @@ class FTPdLite:
 
     async def dele(self, filepath, session):
         """
-        Given a path, delete the file.
+        Given a path, delete the file. RFC-959
 
         Args:
             filepath (string): a path indicating a file resource
@@ -501,9 +526,10 @@ class FTPdLite:
     async def help(self, _, session):
         """
         Reply with help only in a general sense, not per individual command.
+        RFC-959
 
         Args:
-            _ (discard): this server does not support specific topics
+            _ (discard): this server does not support specific help topics
             session (object): the FTP client's login session info
 
         Returns:
@@ -525,7 +551,7 @@ class FTPdLite:
     async def list(self, dirpath, session):
         """
         Send a Linux style directory listing, though ownership and permission
-        has no meaning in the flash filesystem.
+        has no meaning in the flash filesystem. RFC-959
 
         Args:
             dirpath (string): a path indicating a directory resource
@@ -576,7 +602,7 @@ class FTPdLite:
 
     async def mode(self, param, session):
         """
-        Obsolete, but included for compatibility.
+        This server (and most others) only supports stream mode. RFC-959
 
         Args:
             param (string): single character to indicate transfer mode
@@ -619,6 +645,7 @@ class FTPdLite:
     async def nlst(self, dirpath, session):
         """
         Send a list of file names only, without the extra information.
+        RFC-959
 
         Args:
             dirpath (string): a path indicating a directory resource
@@ -665,6 +692,7 @@ class FTPdLite:
     async def noop(self, _, session):
         """
         Do nothing. Used by some clients to stop the connection from timing out.
+        RFC-959
 
         Args:
             _ (discard): command does not take parameters
@@ -709,7 +737,7 @@ class FTPdLite:
 
     async def passwd(self, password, session):
         """
-        Verify user credentials and drop the connection if incorrect.
+        Verify user credentials and drop the connection if incorrect. RFC-959
 
         Args:
             password (string): the cleartext password
@@ -718,8 +746,11 @@ class FTPdLite:
         Returns:
             boolean: True if login succeeded, False if not
         """
-        for stored_credential in self.credentials:
+        # First, find the user entry.
+        for stored_credential in self._credentials:
             if stored_credential.startswith(session.username + ":"):
+                if self.debug:
+                    print("Found user entry:", stored_credential)
                 break
         else:
             print("User not found:", session.username)
@@ -728,13 +759,25 @@ class FTPdLite:
                 430, "Invalid username or password.", session.ctrl_writer
             )
             return False
-        if self.debug:
-            print("DEBUG: Expecting:", stored_credential)
-            print(f"DEBUG: Got: {session.username}:{password}")
-        if (
-            session.username != stored_credential.split(":", 1)[0]
-            or password != stored_credential.split(":", 1)[1]
-        ):
+
+        # Next, decode the fields.
+        if stored_credential.count(":") == 1:  # htpasswd-style
+            user, pw = stored_credential.split(":")
+            uid = 1000  # anything not zero is an unprivileged user id
+            gid = 1000  # same applies for the group id
+        elif stored_credential.count(":") == 6:  # Unix-style
+            user, pw, uid, gid, gecos, dir, shell = stored_credential.split(":")
+            uid = int(uid)
+            gid = int(gid)
+        else:
+            print("Stored credential is invalid for:", session.username)
+            await self.send_response(
+                530, "Invalid username or password.", session.ctrl_writer
+            )
+            return False
+
+        # Finally, validate the user's password.
+        if session.username != user or password != pw:
             await sleep_ms(1000)
             await self.send_response(
                 430, "Invalid username or password.", session.ctrl_writer
@@ -742,12 +785,14 @@ class FTPdLite:
             return False
         else:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
+            session.uid = uid
+            session.gid = gid
             return True
 
     async def pasv(self, _, session):
         """
         Start a new data listener on one of the high numbered ports and
-        report back to the client.
+        report back to the client. RFC-959
 
         Args:
             _ (discard): command does not take parameters
@@ -821,6 +866,7 @@ class FTPdLite:
     async def quit(self, _, session):
         """
         User sign off. Returning False signals exit by the control channel loop.
+        RFC-959
 
         Args:
             _ (discard): command does not take parameters
@@ -835,7 +881,7 @@ class FTPdLite:
     async def retr(self, filepath, session):
         """
         Given a file path, retrieve the file from flash ram and send it to
-        the client over the data connection established by PASV.
+        the client over the data connection established by PASV. RFC-959
 
         Args:
             file (string): a path indicating the file resource
@@ -897,23 +943,37 @@ class FTPdLite:
         style `df` and `free` commands as well as MicroPython-specific
         forced garbage collection.
         """
-        if param.lower() == "df":
-            df_output = await FTPdLite.site_df()
-            await self.send_response(211, df_output, session.ctrl_writer)
-        elif param.lower() == "free":
-            free_output = await FTPdLite.site_free()
-            await self.send_response(211, free_output, session.ctrl_writer)
-        elif param.lower() == "gc":
-            collect()
-            await self.send_response(211, "OK.", session.ctrl_writer)
+        param = param.lower()
+        if param == "df":
+            output = await self.site_df()
+            await self.send_response(211, output, session.ctrl_writer)
+        elif param == "free":
+            output = await self.site_free()
+            await self.send_response(211, output, session.ctrl_writer)
+        elif param == "gc":
+            output = await self.site_gc()
+            await self.send_response(211, output, session.ctrl_writer)
+        elif param == "reboot":
+            if self.debug:
+                print("Reboot attempt by:", session.username, session.uid, session.gid)
+            if session.gid != 0:
+                await self.send_response(550, "Not authorized.", session.ctrl_writer)
+            else:
+                await self.send_response(
+                    221, "Server going down for reboot.", session.ctrl_writer
+                )
+                await sleep_ms(1000)
+                await self.site_reboot()
+        elif param == "who":
+            output = await self.site_who()
+            await self.send_response(211, output, session.ctrl_writer)
         else:
             await self.send_response(
                 504, "Parameter not supported.", session.ctrl_writer
             )
         return True
 
-    @staticmethod
-    async def site_df():
+    async def site_df(self):
         properties = statvfs("/")
         fragment_size = properties[1]
         blocks_total = properties[2]
@@ -929,8 +989,7 @@ class FTPdLite:
         ]
         return output
 
-    @staticmethod
-    async def site_free():
+    async def site_free(self):
         free = mem_free() // 1024
         used = mem_alloc() // 1024
         total = (mem_free() + mem_alloc()) // 1024
@@ -939,6 +998,31 @@ class FTPdLite:
             f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
             "End.",
         ]
+        return output
+
+    async def site_gc(self):
+        before = mem_free()
+        collect()
+        after = mem_free()
+        regained_kb = (after - before) // 1024
+        return f"Additional {regained_kb}KiB available."
+
+    async def site_reboot(self):
+        reset()
+
+    async def site_who(self):
+        user_width = 0
+        addr_width = 0
+        output = ["Current users:"]
+        for s in self.session_list:
+            user_width = max(user_width, len(s.username))
+            addr_width = max(addr_width, len(s.client_ip))
+        for s in self.session_list:
+            login_time = FTPdLite.date_format(s.login_time)
+            output.append(
+                f"{s.username:{user_width}s}  {s.client_ip:{addr_width}s}  {login_time}"
+            )
+        output.append(f"Total: {len(self.session_list)}")
         return output
 
     async def size(self, filepath, session):
@@ -957,7 +1041,7 @@ class FTPdLite:
 
     async def stat(self, pathname, session):
         """
-        Report sytem status or existence of file/dir.
+        Report sytem status or existence of file/dir. RFC-959
 
         Args:
             pathname (string): path to a file or directory
@@ -1001,7 +1085,7 @@ class FTPdLite:
     async def stor(self, filepath, session):
         """
         Given a file path, open a data connection and write the incoming
-        stream data to the file.
+        stream data to the file. RFC-959
         """
         filepath = FTPdLite.decode_path(session.cwd, filepath)
         if await self.verify_data_connection(session) is False:
@@ -1029,7 +1113,7 @@ class FTPdLite:
 
     async def stru(self, param, session):
         """
-        Obsolete, but included for compatibility.
+        Obsolete, but included for compatibility. RFC-959
 
         Args:
             param (string): single character to indicate file structure
@@ -1047,7 +1131,7 @@ class FTPdLite:
 
     async def syst(self, _, session):
         """
-        Reply to indicate this server follows Unix conventions.
+        Reply to indicate this server follows Unix conventions. RFC-959
         """
         await self.send_response(215, "UNIX Type: L8", session.ctrl_writer)
         return True
@@ -1055,7 +1139,8 @@ class FTPdLite:
     async def type(self, type, session):
         """
         TYPE is implemented to satisfy some clients, but doesn't actually
-        do anything to change the translation of end-of-line characters.
+        do anything to change the translation of end-of-line characters
+        for this server. RFC-959
         """
         if type.upper() in ("A", "A N", "I", "L 8"):
             await self.send_response(200, "Always in binary mode.", session.ctrl_writer)
@@ -1065,7 +1150,7 @@ class FTPdLite:
 
     async def user(self, username, session):
         """
-        Record the username and prompt for a password.
+        Record the username and prompt for a password. RFC-959
 
         Args:
             username (string): the USER presented at the login prompt
