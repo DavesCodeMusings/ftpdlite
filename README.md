@@ -3,6 +3,8 @@ _File systems in flight! FTPdLite!_
 
 **FTPdLite is a work in progress. See Caveats below to adjust your expectations.**
 
+Important update! FTPdLite now has no default user account and starts in readonly mode. See _How can I use it?_ below for configuration steps.
+
 ## What is it?
 FTPdLite is an FTP server written in MicroPython using asyncio. The goal is to provide easy access to files on a microcontroller's flash file system without dragging out a USB cable.
 
