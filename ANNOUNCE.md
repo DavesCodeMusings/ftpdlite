@@ -70,11 +70,7 @@ ftp> site free
 211-Mem:    133KiB      52KiB      80KiB
 211 End.
 ftp> site gc
-211 OK.
-ftp> site free
-211-         Total       Used      Avail
-211-Mem:    133KiB      26KiB     106KiB
-211 End.
+211 Additional 68KiB available.
 ftp> rstat
 211-FTPdLite (MicroPython)
 211-System date: Nov 18 15:43
