@@ -109,18 +109,19 @@ class FTPdLite:
 
     def __init__(
         self,
-        readonly=True,
         pasv_port_range=range(49152, 49407),
+        readonly=True,
         request_buffer_size=512,
+        server_name = "FTPdLite (MicroPython)",
     ):
-        self.server_name = "FTPdLite (MicroPython)"
         self._credentials = []
-        self.readonly = readonly
-        self.start_time = time()
-        self.request_buffer_size = request_buffer_size
-        self.pasv_port_pool = list(pasv_port_range)
-        self.session_list = []
-        self.command_dictionary = {
+        self._pasv_port_pool = list(pasv_port_range)
+        self._readonly = readonly
+        self._request_buffer_size = request_buffer_size
+        self._server_name = server_name
+        self._start_time = time()
+        self._session_list = []
+        self._command_dictionary = {
             "CDUP": self.cdup,
             "CWD": self.cwd,
             "EPSV": self.epsv,
@@ -149,7 +150,7 @@ class FTPdLite:
             "XPWD": self.pwd,
         }
         if readonly is True:
-            self.command_dictionary.update(
+            self._command_dictionary.update(
                 {
                     "DELE": self.no_permission,
                     "MKD": self.no_permission,
@@ -160,7 +161,7 @@ class FTPdLite:
                 }
             )
         else:
-            self.command_dictionary.update(
+            self._command_dictionary.update(
                 {
                     "DELE": self.dele,
                     "MKD": self.mkd,
@@ -305,13 +306,13 @@ class FTPdLite:
 
         Returns: nothing
         """
-        for i in range(len(self.session_list)):
-            if self.session_list[i] == session:
+        for i in range(len(self._session_list)):
+            if self._session_list[i] == session:
                 if self.debug:
                     print(
-                        f"DEBUG: delete_session({session}) deleted: {self.session_list[i]}"
+                        f"DEBUG: delete_session({session}) deleted: {self._session_list[i]}"
                     )
-                del self.session_list[i]
+                del self._session_list[i]
                 break
 
     async def find_session(self, search_ip):
@@ -324,7 +325,7 @@ class FTPdLite:
         Returns:
             object: the Session object with the associated client_ip
         """
-        for s in self.session_list:
+        for s in self._session_list:
             if s.client_ip == search_ip:
                 break
         else:
@@ -341,8 +342,8 @@ class FTPdLite:
         Returns:
             integer: TCP port number
         """
-        port = self.pasv_port_pool.pop(0)
-        self.pasv_port_pool.append(port)
+        port = self._pasv_port_pool.pop(0)
+        self._pasv_port_pool.append(port)
         return port
 
     async def parse_request(self, req_buffer):
@@ -535,7 +536,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        commands = sorted(list(self.command_dictionary.keys()))
+        commands = sorted(list(self._command_dictionary.keys()))
         help_output = ["Available commands:"]
         line = ""
         for c in range(len(commands)):
@@ -544,6 +545,7 @@ class FTPdLite:
                 help_output.append(line)
                 line = ""
         help_output.append(line)
+        help_output.append("See SITE HELP for extra features.")
         help_output.append("End.")
         await self.send_response(211, help_output, session.ctrl_writer)
         return True
@@ -581,11 +583,11 @@ class FTPdLite:
                 for entry in dir_entries:
                     properties = stat(dirpath + "/" + entry)
                     if properties[0] & 0x4000:  # entry is a directory
-                        permissions = "dr-xr-xr-x" if self.readonly else "drwxr-xr-x"
+                        permissions = "dr-xr-xr-x" if self._readonly else "drwxr-xr-x"
                         size = 0
                         entry += "/"
                     else:
-                        permissions = "-r--r--r--" if self.readonly else "-rw-r--r--"
+                        permissions = "-r--r--r--" if self._readonly else "-rw-r--r--"
                         size = properties[6]
                     uid = "root" if properties[4] == 0 else properties[4]
                     gid = "root" if properties[5] == 0 else properties[5]
@@ -953,10 +955,13 @@ class FTPdLite:
         elif param == "gc":
             output = await self.site_gc()
             await self.send_response(211, output, session.ctrl_writer)
+        elif param == "help":
+            output = await self.site_help()
+            await self.send_response(211, output, session.ctrl_writer)
         elif param == "reboot":
             if self.debug:
                 print("Reboot attempt by:", session.username, session.uid, session.gid)
-            if session.gid != 0:
+            if session.uid !=0 and session.gid != 0:
                 await self.send_response(550, "Not authorized.", session.ctrl_writer)
             else:
                 await self.send_response(
@@ -1007,6 +1012,18 @@ class FTPdLite:
         regained_kb = (after - before) // 1024
         return f"Additional {regained_kb}KiB available."
 
+    async def site_help(self):
+        output = [
+            "Usage: SITE <CMD>",
+            "  df      report file system space usage",
+            "  free    display free and used memory",
+            "  gc      run garbage collection",
+            "  reboot  reboot the system",
+            "  who     show who is logged in",
+            "End."
+        ]
+        return output
+
     async def site_reboot(self):
         reset()
 
@@ -1014,15 +1031,15 @@ class FTPdLite:
         user_width = 0
         addr_width = 0
         output = ["Current users:"]
-        for s in self.session_list:
+        for s in self._session_list:
             user_width = max(user_width, len(s.username))
             addr_width = max(addr_width, len(s.client_ip))
-        for s in self.session_list:
+        for s in self._session_list:
             login_time = FTPdLite.date_format(s.login_time)
             output.append(
                 f"{s.username:{user_width}s}  {s.client_ip:{addr_width}s}  {login_time}"
             )
-        output.append(f"Total: {len(self.session_list)}")
+        output.append(f"Total: {len(self._session_list)}")
         return output
 
     async def size(self, filepath, session):
@@ -1050,7 +1067,7 @@ class FTPdLite:
             boolean: always True
         """
         if pathname is None or pathname == "":
-            seconds = time() - self.start_time
+            seconds = time() - self._start_time
             days = seconds // 86400
             seconds = seconds % 86400
             hours = seconds // 3600
@@ -1058,10 +1075,10 @@ class FTPdLite:
             mins = seconds // 60
             mins_pad = "0" if mins < 10 else ""
             server_status = [
-                f"{self.server_name}",
+                f"{self._server_name}",
                 f"System date: {FTPdLite.date_format(time())}",
                 f"Uptime: {days} days, {hours}:{mins_pad}{mins}",
-                f"Number of users: {len(self.session_list)}",
+                f"Number of users: {len(self._session_list)}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
@@ -1278,18 +1295,18 @@ class FTPdLite:
         client_ip, client_port = ctrl_writer.get_extra_info("peername")
         print(f"Connection from client: {client_ip}")
         if (
-            len(self.session_list) > 10
+            len(self._session_list) > 10
             or await self.find_session(client_ip) is not None
         ):
             await self.send_response(421, "Too many connections.", ctrl_writer)
         else:
             session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
-            self.session_list.append(session)
+            self._session_list.append(session)
             session_active = True  # Becomes False on QUIT or other disconnection event.
-            await self.send_response(220, self.server_name, ctrl_writer)
+            await self.send_response(220, self._server_name, ctrl_writer)
             while session_active:
                 try:
-                    request = await ctrl_reader.read(self.request_buffer_size)
+                    request = await ctrl_reader.read(self._request_buffer_size)
                 except OSError:  # Unexpected disconnection.
                     print("ERROR: Control connection closed unexpectedly.")
                     session_active = False
@@ -1298,7 +1315,7 @@ class FTPdLite:
                 else:
                     verb, param = await self.parse_request(request)
                 try:
-                    func = self.command_dictionary[verb]
+                    func = self._command_dictionary[verb]
                 except KeyError:
                     await self.send_response(
                         502, "Command not implemented.", ctrl_writer
