@@ -297,6 +297,10 @@ class FTPdLite:
             self._credentials.append(credential)
             return True
 
+    async def debug(self, msg):
+        if self._debug:
+            print("DEBUG:", msg)
+
     async def delete_session(self, session):
         """
         Given a session object, delete it from the server's session list.
@@ -308,10 +312,7 @@ class FTPdLite:
         """
         for i in range(len(self._session_list)):
             if self._session_list[i] == session:
-                if self.debug:
-                    print(
-                        f"DEBUG: delete_session({session}) deleted: {self._session_list[i]}"
-                    )
+                await self.debug(f"delete_session({session}) deleted: {self._session_list[i]}")
                 del self._session_list[i]
                 break
 
@@ -330,8 +331,7 @@ class FTPdLite:
                 break
         else:
             s = None
-        if self.debug:
-            print(f"DEBUG: find_session({search_ip}) = {s}")
+        await self.debug(f"find_session({search_ip}) found: {s}")
         return s
 
     async def get_pasv_port(self):
@@ -499,8 +499,7 @@ class FTPdLite:
             boolean: always True
         """
         port = await self.get_pasv_port()
-        if self.debug:
-            print(f"DEBUG: Starting data listener on port: {port}")
+        await self.debug(f"Starting data listener on port: {port}")
         session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
@@ -751,8 +750,7 @@ class FTPdLite:
         # First, find the user entry.
         for stored_credential in self._credentials:
             if stored_credential.startswith(session.username + ":"):
-                if self.debug:
-                    print("Found user entry:", stored_credential)
+                await self.debug(f"Found user entry: {stored_credential}")
                 break
         else:
             print("User not found:", session.username)
@@ -807,8 +805,7 @@ class FTPdLite:
         port = await self.get_pasv_port()
         port_octet_high = port // 256
         port_octet_low = port % 256
-        if self.debug:
-            print(f"DEBUG: Starting data listener on port: {self.host}:{port}")
+        await self.debug(f"Starting data listener on port: {self.host}:{port}")
         session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
@@ -959,8 +956,7 @@ class FTPdLite:
             output = await self.site_help()
             await self.send_response(211, output, session.ctrl_writer)
         elif param == "reboot":
-            if self.debug:
-                print("Reboot attempt by:", session.username, session.uid, session.gid)
+            await self.debug(f"Reboot attempt by: {session.username} {session.uid}:{session.gid}")
             if session.uid !=0 and session.gid != 0:
                 await self.send_response(550, "Not authorized.", session.ctrl_writer)
             else:
@@ -1215,13 +1211,11 @@ class FTPdLite:
 
         Returns: nothing
         """
-        if self.debug:
-            print("DEBUG: Closing data connection...")
+        await self.debug("Closing data connection...")
         try:
             session.data_writer
         except AttributeError:
-            if self.debug:
-                print("DEBUG: No data writer stream exists to be closed.")
+            await self.debug("No data writer stream exists to be closed.")
         else:
             session.data_writer.close()
             await session.data_writer.wait_closed()
@@ -1229,8 +1223,7 @@ class FTPdLite:
         try:
             session.data_reader
         except AttributeError:
-            if self.debug:
-                print("DEBUG: No data reader stream exists to be closed.")
+            await self.debug("No data reader stream exists to be closed.")
         else:
             session.data_reader.close()
             await session.data_reader.wait_closed()
@@ -1238,15 +1231,13 @@ class FTPdLite:
         try:
             session.data_listener
         except AttributeError:
-            if self.debug:
-                print("DEBUG: No data listener object exists to be closed.")
-                print("DEBUG: This is normal for PORT transfers.")
+            await self.debug("No data listener object exists to be closed.")
+            await self.debug("This is normal for PORT transfers.")
         else:
             session.data_listener.close()
             await session.data_listener.wait_closed()
             del session.data_listener
-        if self.debug:
-            print("DEBUG: Data connection closed.")
+        await self.debug("Data connection closed.")
 
     async def on_data_connect(self, data_reader, data_writer):
         """
@@ -1257,14 +1248,12 @@ class FTPdLite:
             data_writer (stream): files/data requested by the client
         """
         client_ip, client_port = data_writer.get_extra_info("peername")
-        if self.debug:
-            print(f"DEBUG: Data connection from: {client_ip}:{client_port}")
+        await self.debug(f"Data connection from: {client_ip}:{client_port}")
         session = await self.find_session(client_ip)
         session.data_reader = data_reader
         session.data_writer = data_writer
-        if self.debug:
-            print(f"DEBUG: session.data_reader = {session.data_reader}")
-            print(f"DEBUG: session.data_writer = {session.data_writer}")
+        await self.debug(f"session.data_reader = {session.data_reader}")
+        await self.debug(f"session.data_writer = {session.data_writer}")
 
     async def close_ctrl_connection(self, session):
         """
@@ -1279,8 +1268,7 @@ class FTPdLite:
         await session.ctrl_writer.wait_closed()
         session.ctrl_reader.close()
         await session.ctrl_reader.wait_closed()
-        if self.debug:
-            print(f"DEBUG: Control connection closed for {session.client_ip}")
+        await self.debug(f"Control connection closed for: {session.client_ip}")
 
     async def on_ctrl_connect(self, ctrl_reader, ctrl_writer):
         """
@@ -1295,7 +1283,7 @@ class FTPdLite:
         client_ip, client_port = ctrl_writer.get_extra_info("peername")
         print(f"Connection from client: {client_ip}")
         if (
-            len(self._session_list) > 10
+            len(self._session_list) > 10  # completely arbitrary limit
             or await self.find_session(client_ip) is not None
         ):
             await self.send_response(421, "Too many connections.", ctrl_writer)
@@ -1342,7 +1330,7 @@ class FTPdLite:
             object: the same loop object given as a parameter or a new
               one if no existing loop was passed
         """
-        self.debug = debug
+        self._debug = debug
         now = time()
         jan_1_2023 = mktime((2023, 1, 1, 0, 0, 0, 0, 1))
         if now < jan_1_2023:
