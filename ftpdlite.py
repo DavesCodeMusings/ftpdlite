@@ -230,7 +230,7 @@ class FTPdLite:
         Returns:
             string: an absolute path to the resource
         """
-        if path.startswith("-"):
+        if path is not None and path.startswith("-"):
             path = ""  # client sent a commandline option, just ignore it
         if path is None or path == "" and empty_means_cwd is True:
             absolute_path = cwd
