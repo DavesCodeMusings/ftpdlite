@@ -38,7 +38,7 @@ Add server.credentials for whatever users make sense to you. `add_credential()` 
 * Some commands, like `site kick` and `site reboot`, are only authorized for an account with a group id of 0. (That's the second 0 in _root:root:0:0:Super User:/:/bin/nologin_)
 * htpasswd-style credentials are automatically assigned to gid 1000. So no privileged access.
 * The Unix-style GECOS, home, and login shell fields are just place holders. They have no effect on anything.
-* Password encryption is not supported yet.
+* Password encryption is not supported... yet.
 * **There are no defaults user accounts. You must add at least one credential or you can't log in.**
 
 Boot your microcontroller and point your FTP client to port 21.
