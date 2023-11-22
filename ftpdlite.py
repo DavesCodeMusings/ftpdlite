@@ -552,7 +552,7 @@ class FTPdLite:
             boolean: always True
         """
         commands = sorted(list(self._ftp_cmd_dict.keys()))
-        help_output = ["Available commands:"]
+        help_output = ["Available FTP commands:"]
         line = ""
         for c in range(len(commands)):
             line += f"{commands[c]:4s}   "
@@ -562,7 +562,7 @@ class FTPdLite:
         help_output.append(line)
         help_output.append("See SITE HELP for extra features.")
         help_output.append("End.")
-        await self.send_response(211, help_output, session.ctrl_writer)
+        await self.send_response(214, help_output, session.ctrl_writer)
         return True
 
     async def list(self, dirpath, session):
@@ -1032,7 +1032,7 @@ class FTPdLite:
                 _, cmd_help = await func("help", session)  # discard status code
                 output.append(f"  {commands[c]:>{max_width}s}  {cmd_help}")
             output.append("End.")
-            return 211, output
+            return 214, output
 
     async def site_kick(self, param, session):
         if param == "help":
