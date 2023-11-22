@@ -177,6 +177,7 @@ class FTPdLite:
             "free": self.site_free,
             "gc": self.site_gc,
             "help": self.site_help,
+            "kick": self.site_kick,
             "reboot": self.site_reboot,
             "uptime": self.site_uptime,
             "who": self.site_who,
@@ -975,7 +976,7 @@ class FTPdLite:
 
     async def site_df(self, param, session):
         if param == "help":
-            return 211, "report file system space usage"
+            return 214, "report file system space usage"
         else:
             properties = statvfs("/")
             fragment_size = properties[1]
@@ -994,7 +995,7 @@ class FTPdLite:
 
     async def site_free(self, param, session):
         if param == "help":
-            return 211, "display free and used memory"
+            return 214, "display free and used memory"
         else:
             free = mem_free() // 1024
             used = mem_alloc() // 1024
@@ -1008,7 +1009,7 @@ class FTPdLite:
 
     async def site_gc(self, param, session):
         if param == "help":
-            return 211, "run garbage collection"
+            return 214, "run garbage collection"
         else:
             before = mem_free()
             collect()
@@ -1019,7 +1020,7 @@ class FTPdLite:
 
     async def site_help(self, topic, session):
         if topic == "help":
-            return 211, "get brief description of a command"
+            return 214, "get brief description of a command"
         else:
             output = ["Available SITE commands:"]
             max_width = 0
@@ -1033,9 +1034,42 @@ class FTPdLite:
             output.append("End.")
             return 211, output
 
+    async def site_kick(self, param, session):
+        if param == "help":
+            return 214, "disconnect a session by username or IP"
+        elif session.gid != 0:
+            return 550, "Not authorized."
+        else:
+            if param and param[0].isdigit():
+                type = "client"
+                count = 0
+                for s in self._session_list:
+                    if s.client_ip == param:
+                        session_to_kick = s
+                        count += 1
+                await self.debug(f"Found {count} instances of {type} {param}")
+            else:
+                type = "user"
+                count = 0
+                for s in self._session_list:
+                    if s.username == param:
+                        session_to_kick = s
+                        count += 1
+                await self.debug(f"Found {count} instances of {type} {param}")
+            if count < 1:
+                return 450, "Not found."
+            elif count > 1:
+                return 450, f"Multiple instances of {param} exist."
+            else:
+                await self.debug(f"Kicking session {session_to_kick}")
+                await self.close_data_connection(session_to_kick)
+                await self.close_ctrl_connection(session_to_kick)
+                await self.delete_session(session_to_kick)
+                return 211, f"Kicked {type} {param}"
+
     async def site_reboot(self, param, session):
         if param == "help":
-            return 211, "reboot the system"
+            return 214, "reboot the system"
         else:
             await self.debug(
                 f"Reboot requested by: {session.username} {session.uid}:{session.gid}"
@@ -1051,7 +1085,7 @@ class FTPdLite:
 
     async def site_uptime(self, param, session):
         if param == "help":
-            return 211, "tell how long the system's been running"
+            return 214, "tell how long the system's been running"
         else:
             seconds = time() - self._start_time
             days = seconds // 86400
@@ -1066,7 +1100,7 @@ class FTPdLite:
 
     async def site_who(self, param, session):
         if param == "help":
-            return 211, "show who's logged in"
+            return 214, "show who's logged in"
         else:
             user_width = 0
             addr_width = 0
@@ -1084,7 +1118,7 @@ class FTPdLite:
 
     async def site_whoami(self, param, session):
         if param == "help":
-            return 211, "display info for current user"
+            return 214, "display info for current user"
         else:
             login_time = FTPdLite.date_format(session.login_time)
             output = f"{session.username}  {session.client_ip}  {login_time}"
