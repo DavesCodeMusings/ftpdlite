@@ -112,7 +112,7 @@ class FTPdLite:
         pasv_port_range=range(49152, 49407),
         readonly=True,
         request_buffer_size=512,
-        server_name = "FTPdLite (MicroPython)",
+        server_name="FTPdLite (MicroPython)",
     ):
         self._credentials = []
         self._pasv_port_pool = list(pasv_port_range)
@@ -121,7 +121,7 @@ class FTPdLite:
         self._server_name = server_name
         self._start_time = time()
         self._session_list = []
-        self._command_dictionary = {
+        self._ftp_cmd_dict = {
             "CDUP": self.cdup,
             "CWD": self.cwd,
             "EPSV": self.epsv,
@@ -150,7 +150,7 @@ class FTPdLite:
             "XPWD": self.pwd,
         }
         if readonly is True:
-            self._command_dictionary.update(
+            self._ftp_cmd_dict.update(
                 {
                     "DELE": self.no_permission,
                     "MKD": self.no_permission,
@@ -161,7 +161,7 @@ class FTPdLite:
                 }
             )
         else:
-            self._command_dictionary.update(
+            self._ftp_cmd_dict.update(
                 {
                     "DELE": self.dele,
                     "MKD": self.mkd,
@@ -171,6 +171,17 @@ class FTPdLite:
                     "XRMD": self.rmd,
                 }
             )
+
+        self._site_cmd_dict = {
+            "df": self.site_df,
+            "free": self.site_free,
+            "gc": self.site_gc,
+            "help": self.site_help,
+            "reboot": self.site_reboot,
+            "uptime": self.site_uptime,
+            "who": self.site_who,
+            "whoami": self.site_whoami,
+        }
 
     @staticmethod
     def date_format(timestamp):
@@ -314,7 +325,9 @@ class FTPdLite:
         """
         for i in range(len(self._session_list)):
             if self._session_list[i] == session:
-                await self.debug(f"delete_session({session}) deleted: {self._session_list[i]}")
+                await self.debug(
+                    f"delete_session({session}) deleted: {self._session_list[i]}"
+                )
                 del self._session_list[i]
                 break
 
@@ -537,7 +550,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        commands = sorted(list(self._command_dictionary.keys()))
+        commands = sorted(list(self._ftp_cmd_dict.keys()))
         help_output = ["Available commands:"]
         line = ""
         for c in range(len(commands)):
@@ -940,105 +953,142 @@ class FTPdLite:
     async def site(self, param, session):
         """
         RFC-959 specifies SITE as a way to access services not defined
-        in the common set of FTP commands. This server offers the Unix-
-        style `df` and `free` commands as well as MicroPython-specific
-        forced garbage collection.
+        in the common set of FTP commands. This server offers several
+        Unix-style commands as well as a few MicroPython-specific ones.
         """
-        param = param.lower()
-        if param == "df":
-            output = await self.site_df()
+        if " " in param:
+            site_cmd = param.split(None, 1)[0].lower()
+            site_param = param.split(None, 1)[1]
+        else:
+            site_cmd = param.lower()
+            site_param = ""
+        try:
+            func = self._site_cmd_dict[site_cmd]
+        except KeyError:
+            await self.send_response(
+                504, "Parameter not supported.", session.ctrl_writer
+            )
+        else:
+            status, output = await func(site_param, session)
+            await self.send_response(status, output, session.ctrl_writer)
+        return True
+
+    async def site_df(self, param, session):
+        if param == "help":
+            return 211, "report file system space usage"
+        else:
+            properties = statvfs("/")
+            fragment_size = properties[1]
+            blocks_total = properties[2]
+            blocks_available = properties[4]
+            size_kb = int(blocks_total * fragment_size / 1024)
+            avail_kb = int(blocks_available * fragment_size / 1024)
+            used_kb = size_kb - avail_kb
+            percent_used = round(100 * used_kb / size_kb)
+            output = [
+                "Filesystem        Size        Used       Avail   Use%",
+                f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
+                "End.",
+            ]
+            return 211, output
+
+    async def site_free(self, param, session):
+        if param == "help":
+            return 211, "display free and used memory"
+        else:
+            free = mem_free() // 1024
+            used = mem_alloc() // 1024
+            total = (mem_free() + mem_alloc()) // 1024
+            output = [
+                "         Total       Used      Avail",
+                f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
+                "End.",
+            ]
+            return 211, output
+
+    async def site_gc(self, param, session):
+        if param == "help":
+            return 211, "run garbage collection"
+        else:
+            before = mem_free()
+            collect()
+            after = mem_free()
+            regained_kb = (after - before) // 1024
+            output = f"Additional {regained_kb}KiB available."
             await self.send_response(211, output, session.ctrl_writer)
-        elif param == "free":
-            output = await self.site_free()
-            await self.send_response(211, output, session.ctrl_writer)
-        elif param == "gc":
-            output = await self.site_gc()
-            await self.send_response(211, output, session.ctrl_writer)
-        elif param == "help":
-            output = await self.site_help()
-            await self.send_response(211, output, session.ctrl_writer)
-        elif param == "reboot":
-            await self.debug(f"Reboot attempt by: {session.username} {session.uid}:{session.gid}")
-            if session.uid !=0 and session.gid != 0:
-                await self.send_response(550, "Not authorized.", session.ctrl_writer)
+
+    async def site_help(self, topic, session):
+        if topic == "help":
+            return 211, "get brief description of a command"
+        else:
+            output = ["Available SITE commands:"]
+            max_width = 0
+            for cmd in self._site_cmd_dict:
+                max_width = max(max_width, len(cmd))
+            commands = sorted(list(self._site_cmd_dict.keys()))
+            for c in range(len(commands)):
+                func = self._site_cmd_dict[commands[c]]
+                _, cmd_help = await func("help", session)  # discard status code
+                output.append(f"  {commands[c]:>{max_width}s}  {cmd_help}")
+            output.append("End.")
+            return 211, output
+
+    async def site_reboot(self, param, session):
+        if param == "help":
+            return 211, "reboot the system"
+        else:
+            await self.debug(
+                f"Reboot requested by: {session.username} {session.uid}:{session.gid}"
+            )
+            if session.uid != 0 and session.gid != 0:
+                return 550, "Not authorized."
             else:
                 await self.send_response(
                     221, "Server going down for reboot.", session.ctrl_writer
                 )
                 await sleep_ms(1000)
-                await self.site_reboot()
-        elif param == "who":
-            output = await self.site_who()
-            await self.send_response(211, output, session.ctrl_writer)
+                reset()
+
+    async def site_uptime(self, param, session):
+        if param == "help":
+            return 211, "tell how long the system's been running"
         else:
-            await self.send_response(
-                504, "Parameter not supported.", session.ctrl_writer
-            )
-        return True
+            seconds = time() - self._start_time
+            days = seconds // 86400
+            seconds = seconds % 86400
+            hours = seconds // 3600
+            seconds = seconds % 3600
+            mins = seconds // 60
+            mins_pad = "0" if mins < 10 else ""
+            now = FTPdLite.date_format(time())
+            output = f"{now} up {days} days, {hours}:{mins_pad}{mins}, {len(self._session_list)} users"
+            return 211, output
 
-    async def site_df(self):
-        properties = statvfs("/")
-        fragment_size = properties[1]
-        blocks_total = properties[2]
-        blocks_available = properties[4]
-        size_kb = int(blocks_total * fragment_size / 1024)
-        avail_kb = int(blocks_available * fragment_size / 1024)
-        used_kb = size_kb - avail_kb
-        percent_used = round(100 * used_kb / size_kb)
-        output = [
-            "Filesystem        Size        Used       Avail   Use%",
-            f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
-            "End.",
-        ]
-        return output
+    async def site_who(self, param, session):
+        if param == "help":
+            return 211, "show who's logged in"
+        else:
+            user_width = 0
+            addr_width = 0
+            output = ["Current users:"]
+            for s in self._session_list:
+                user_width = max(user_width, len(s.username))
+                addr_width = max(addr_width, len(s.client_ip))
+            for s in self._session_list:
+                login_time = FTPdLite.date_format(s.login_time)
+                output.append(
+                    f"{s.username:{user_width}s}  {s.client_ip:{addr_width}s}  {login_time}"
+                )
+            output.append(f"Total: {len(self._session_list)}")
+            return 211, output
 
-    async def site_free(self):
-        free = mem_free() // 1024
-        used = mem_alloc() // 1024
-        total = (mem_free() + mem_alloc()) // 1024
-        output = [
-            "         Total       Used      Avail",
-            f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
-            "End.",
-        ]
-        return output
-
-    async def site_gc(self):
-        before = mem_free()
-        collect()
-        after = mem_free()
-        regained_kb = (after - before) // 1024
-        return f"Additional {regained_kb}KiB available."
-
-    async def site_help(self):
-        output = [
-            "Usage: SITE <CMD>",
-            "  df      report file system space usage",
-            "  free    display free and used memory",
-            "  gc      run garbage collection",
-            "  reboot  reboot the system",
-            "  who     show who is logged in",
-            "End."
-        ]
-        return output
-
-    async def site_reboot(self):
-        reset()
-
-    async def site_who(self):
-        user_width = 0
-        addr_width = 0
-        output = ["Current users:"]
-        for s in self._session_list:
-            user_width = max(user_width, len(s.username))
-            addr_width = max(addr_width, len(s.client_ip))
-        for s in self._session_list:
-            login_time = FTPdLite.date_format(s.login_time)
-            output.append(
-                f"{s.username:{user_width}s}  {s.client_ip:{addr_width}s}  {login_time}"
-            )
-        output.append(f"Total: {len(self._session_list)}")
-        return output
+    async def site_whoami(self, param, session):
+        if param == "help":
+            return 211, "display info for current user"
+        else:
+            login_time = FTPdLite.date_format(session.login_time)
+            output = f"{session.username}  {session.client_ip}  {login_time}"
+            return 211, output
 
     async def size(self, filepath, session):
         """
@@ -1305,7 +1355,7 @@ class FTPdLite:
                 else:
                     verb, param = await self.parse_request(request)
                 try:
-                    func = self._command_dictionary[verb]
+                    func = self._ftp_cmd_dict[verb]
                 except KeyError:
                     await self.send_response(
                         502, "Command not implemented.", ctrl_writer
