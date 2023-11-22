@@ -35,7 +35,7 @@ If you want people to be able to upload files and make directories, pay attentio
 
 Add server.credentials for whatever users make sense to you. `add_credential()` will take either htpasswd-style or Unix-style password entries. There are a few things to keep in mind:
 
-* Some commands, like `site reboot`, are only authorized for an account with a group id of 0. (That's the second 0 in _root:root:0:0:Super User:/:/bin/nologin_)
+* Some commands, like `site kick` and `site reboot`, are only authorized for an account with a group id of 0. (That's the second 0 in _root:root:0:0:Super User:/:/bin/nologin_)
 * htpasswd-style credentials are automatically assigned to gid 1000. So no privileged access.
 * The Unix-style GECOS, home, and login shell fields are just place holders. They have no effect on anything.
 * Password encryption is not supported yet.
