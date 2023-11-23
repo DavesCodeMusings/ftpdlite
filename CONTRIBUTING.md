@@ -16,6 +16,6 @@ Serial console output with FTPdLite started using `run(debug=True)`
 Anything else you think would be helpful
 ```
 
-_Please use the issues rather than a pull request as this makes things easier to manage._
+_Please use the issues rather than a pull request as this makes it easier to understand the problem._
 
 If you think of an enhancement, use the issues for that too. But, please keep in mind the goal of FTPdLite is to provide minimalist file transfer to and from microcontroller hardware using modern FTP clients. So if your request request is something outside of the realm of file transfer, or applies to an obscure client, don't be surprised if it's closed without being implemented.
