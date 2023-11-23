@@ -9,7 +9,7 @@ The goals of FTPdLite are:
 If you find a bug, please create an issue on Github. Using a format similar to the following will help:
 
 ```
-Behavior or FTPdLite
+Behavior exhibited by FTPdLite
 Expected behavior
 FTP Client you're using
 Serial console output with FTPdLite started using `run(debug=True)`
