@@ -12,7 +12,8 @@ If you find a bug, please create an issue on Github. Using a format similar to t
 Behavior or FTPdLite
 Expected behavior
 FTP Client you're using
-FTPdLite code you suspect is causing the issue
+Serial console output with FTPdLite started using `run(debug=True)`
+Anything else you think would be helpful
 ```
 
 _Please use the issues rather than a pull request as this makes things easier to manage._
