@@ -3,7 +3,7 @@ Thanks for your interest in contributing to the project.
 
 The goals of FTPdLite are:
 * Minimalism
-* Operability with common, modern clients
+* Operability with common, modern FTP clients
 * SITE commands to provide a few additional file management features
 
 If you find a bug, please create an issue on Github. Using a format similar to the following will help:
