@@ -332,23 +332,27 @@ class FTPdLite:
                 del self._session_list[i]
                 break
 
-    async def find_session(self, search_ip):
+    async def find_session(self, search_value):
         """
-        Given a client IP address, find the associated session.
+        Given a username or client IP address, find the associated sessions.
 
         Args:
-            search_ip (string): the client IP of interest
+            search_value (string): the username or IP of interest
 
         Returns:
-            object: the Session object with the associated client_ip
+            list[Session]: a list of matching Session objects
         """
-        for s in self._session_list:
-            if s.client_ip == search_ip:
-                break
+        sessions_found = []
+        if search_value and search_value[0].isdigit():
+            for s in self._session_list:
+                if s.client_ip == search_value:
+                    sessions_found.append(s)
         else:
-            s = None
-        await self.debug(f"find_session({search_ip}) found: {s}")
-        return s
+            for s in self._session_list:
+                if s.username == search_value:
+                    sessions_found.append(s)
+        await self.debug(f"find_session({search_value}) found: {sessions_found}")
+        return sessions_found
 
     async def get_pasv_port(self):
         """
@@ -1040,32 +1044,18 @@ class FTPdLite:
         elif session.gid != 0:
             return 550, "Not authorized."
         else:
-            if param and param[0].isdigit():
-                type = "client"
-                count = 0
-                for s in self._session_list:
-                    if s.client_ip == param:
-                        session_to_kick = s
-                        count += 1
-                await self.debug(f"Found {count} instances of {type} {param}")
-            else:
-                type = "user"
-                count = 0
-                for s in self._session_list:
-                    if s.username == param:
-                        session_to_kick = s
-                        count += 1
-                await self.debug(f"Found {count} instances of {type} {param}")
-            if count < 1:
+            matching_sessions = await self.find_session(param)
+            await self.debug(f"Found {len(matching_sessions)} for {param}")
+            if len(matching_sessions) < 1:
                 return 450, "Not found."
-            elif count > 1:
+            elif len(matching_sessions) > 1:
                 return 450, f"Multiple instances of {param} exist."
             else:
-                await self.debug(f"Kicking session {session_to_kick}")
-                await self.close_data_connection(session_to_kick)
-                await self.close_ctrl_connection(session_to_kick)
-                await self.delete_session(session_to_kick)
-                return 211, f"Kicked {type} {param}"
+                await self.debug(f"Kicking session {matching_sessions[0]}")
+                await self.close_data_connection(matching_sessions[0])
+                await self.close_ctrl_connection(matching_sessions[0])
+                await self.delete_session(matching_sessions[0])
+                return 211, f"Kicked {param}"
 
     async def site_reboot(self, param, session):
         if param == "help":
@@ -1335,11 +1325,15 @@ class FTPdLite:
         """
         client_ip, client_port = data_writer.get_extra_info("peername")
         await self.debug(f"Data connection from: {client_ip}:{client_port}")
-        session = await self.find_session(client_ip)
-        session.data_reader = data_reader
-        session.data_writer = data_writer
-        await self.debug(f"session.data_reader = {session.data_reader}")
-        await self.debug(f"session.data_writer = {session.data_writer}")
+        found_sessions = await self.find_session(client_ip)
+        if len(found_sessions) != 1:  # should be only one per IP
+            print("ERROR: Multiple sessions found for {client_ip}")
+        else:
+            session = found_sessions[0]
+            session.data_reader = data_reader
+            session.data_writer = data_writer
+            await self.debug(f"session.data_reader = {session.data_reader}")
+            await self.debug(f"session.data_writer = {session.data_writer}")
 
     async def close_ctrl_connection(self, session):
         """
@@ -1370,7 +1364,7 @@ class FTPdLite:
         print(f"Connection from client: {client_ip}")
         if (
             len(self._session_list) > 10  # completely arbitrary limit
-            or await self.find_session(client_ip) is not None
+            or await self.find_session(client_ip) != []
         ):
             await self.send_response(421, "Too many connections.", ctrl_writer)
         else:
