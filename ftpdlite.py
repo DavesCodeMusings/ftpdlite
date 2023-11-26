@@ -1020,7 +1020,7 @@ class FTPdLite:
             after = mem_free()
             regained_kb = (after - before) // 1024
             output = f"Additional {regained_kb}KiB available."
-            await self.send_response(211, output, session.ctrl_writer)
+            return 211, output
 
     async def site_help(self, topic, session):
         if topic == "help":
@@ -1139,18 +1139,8 @@ class FTPdLite:
             boolean: always True
         """
         if pathname is None or pathname == "":
-            seconds = time() - self._start_time
-            days = seconds // 86400
-            seconds = seconds % 86400
-            hours = seconds // 3600
-            seconds = seconds % 3600
-            mins = seconds // 60
-            mins_pad = "0" if mins < 10 else ""
             server_status = [
                 f"{self._server_name}",
-                f"System date: {FTPdLite.date_format(time())}",
-                f"Uptime: {days} days, {hours}:{mins_pad}{mins}",
-                f"Number of users: {len(self._session_list)}",
                 f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
