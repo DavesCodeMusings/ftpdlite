@@ -1472,14 +1472,14 @@ class FTPdLite:
             await self.delete_session(session)
             session = None
 
-    def run(self, host="127.0.0.1", port=21, stale_timeout=60, loop=None, debug=False):
+    def run(self, host="127.0.0.1", port=21, idle_timeout=60, loop=None, debug=False):
         """
         Start an asynchronous listener for FTP requests.
 
         Args:
             host (string): the IP address of the interface on which to listen
             port (int): the TCP port on which to listen
-            stale_timeout (int): minutes of inactivity before a session is kicked
+            idle_timeout (int): minutes of inactivity before a session is kicked
             loop (object): asyncio loop that the server should insert itself into
             debug (boolean): True indicates verbose logging is desired
 
@@ -1502,5 +1502,5 @@ class FTPdLite:
         loop = get_event_loop()
         server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
         loop.create_task(server)
-        loop.create_task(self.kick_stale(stale_timeout))
+        loop.create_task(self.kick_stale(idle_timeout))
         loop.run_forever()
