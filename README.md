@@ -93,7 +93,7 @@ _Figure 4: Fetching a File Non-Interactively_
 ## Supported Clients
 FTPdLite works best with these clients:
 * The _tnftp_ package on Linux provides an outstanding FTP experience.
-* Gnome VFS FTP client has been reported to work.
+* Gnome VFS FTP client has been reported to work as well.
 * _FileZilla_ (with simultaneous connections set to 1) is the go-to choice for Windows.
 * Windows _ftp.exe_ works, but has a limited command set and its lack of PASV mode presents a problem for firewalls.
 * For non-interactive transfers, _wget_ works well, as does _curl_.
