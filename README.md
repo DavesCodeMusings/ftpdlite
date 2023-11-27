@@ -12,7 +12,7 @@ You shouldn't really. FTP is an I.T. security professional's worst nightmare. Th
 ## How can I use it?
 First, read up on how insecure FTP is. Then, if you still want to do it... 
 
-Refer to the QUICKSTART guide for installation details.
+Refer to the [QUICKSTART](QUICKSTART.md) guide for installation details.
 
 ## Supported Clients
 FTPdLite works best with these clients:
