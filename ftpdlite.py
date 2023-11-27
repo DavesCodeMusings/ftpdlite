@@ -35,9 +35,9 @@ class Session:
         self._client_port = client_port
         self._ctrl_reader = ctrl_reader
         self._ctrl_writer = ctrl_writer
-        self._username = None
-        self._uid = None
-        self._gid = None
+        self._username = "nobody"
+        self._uid = 65534
+        self._gid = 65534
         self._working_dir = getcwd()
         self._login_time = time()
 
@@ -110,13 +110,11 @@ class FTPdLite:
     def __init__(
         self,
         pasv_port_range=range(49152, 49407),
-        readonly=True,
         request_buffer_size=512,
         server_name="FTPdLite (MicroPython)",
     ):
         self._credentials = []
         self._pasv_port_pool = list(pasv_port_range)
-        self._readonly = readonly
         self._request_buffer_size = request_buffer_size
         self._server_name = server_name
         self._start_time = time()
@@ -124,10 +122,12 @@ class FTPdLite:
         self._ftp_cmd_dict = {
             "CDUP": self.cdup,
             "CWD": self.cwd,
+            "DELE": self.dele,
             "EPSV": self.epsv,
             "FEAT": self.feat,
             "HELP": self.help,
             "LIST": self.list,
+            "MKD": self.mkd,
             "MODE": self.mode,
             "NLST": self.nlst,
             "NOOP": self.noop,
@@ -136,41 +136,23 @@ class FTPdLite:
             "PASV": self.pasv,
             "PORT": self.port,
             "PWD": self.pwd,
+            "RMD": self.rmd,
             "QUIT": self.quit,
             "RETR": self.retr,
             "SITE": self.site,
             "SIZE": self.size,
             "STAT": self.stat,
+            "STOR": self.stor,
             "STRU": self.stru,
             "SYST": self.syst,
             "TYPE": self.type,
             "USER": self.user,
             "XCUP": self.cdup,
             "XCWD": self.cwd,
+            "XMKD": self.mkd,
             "XPWD": self.pwd,
+            "XRMD": self.rmd,
         }
-        if readonly is True:
-            self._ftp_cmd_dict.update(
-                {
-                    "DELE": self.no_permission,
-                    "MKD": self.no_permission,
-                    "RMD": self.no_permission,
-                    "STOR": self.no_permission,
-                    "XMKD": self.no_permission,
-                    "XRMD": self.no_permission,
-                }
-            )
-        else:
-            self._ftp_cmd_dict.update(
-                {
-                    "DELE": self.dele,
-                    "MKD": self.mkd,
-                    "RMD": self.rmd,
-                    "STOR": self.stor,
-                    "XMKD": self.mkd,
-                    "XRMD": self.rmd,
-                }
-            )
 
         self._site_cmd_dict = {
             "df": self.site_df,
@@ -496,13 +478,16 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        filepath = FTPdLite.decode_path(session.cwd, filepath)
-        try:
-            remove(filepath)
-        except OSError:
-            await self.send_response(550, "No such file.", session.ctrl_writer)
+        if (session.gid != 0):
+            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            await self.send_response(250, "OK.", session.ctrl_writer)
+            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            try:
+                remove(filepath)
+            except OSError:
+                await self.send_response(550, "No such file.", session.ctrl_writer)
+            else:
+                await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
     async def epsv(self, _, session):
@@ -602,11 +587,11 @@ class FTPdLite:
                 for entry in dir_entries:
                     properties = stat(dirpath + "/" + entry)
                     if properties[0] & 0x4000:  # entry is a directory
-                        permissions = "dr-xr-xr-x" if self._readonly else "drwxr-xr-x"
+                        permissions = "drwxrwxr-x"
                         size = 0
                         entry += "/"
                     else:
-                        permissions = "-r--r--r--" if self._readonly else "-rw-r--r--"
+                        permissions = "-rw-rw-r--"
                         size = properties[6]
                     uid = "root" if properties[4] == 0 else properties[4]
                     gid = "root" if properties[5] == 0 else properties[5]
@@ -651,16 +636,19 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
-        try:
-            mkdir(dirpath)
-            await self.send_response(
-                257, f'"{dirpath}" directory created.', session.ctrl_writer
-            )
-        except OSError:
-            await self.send_response(
-                550, "Failed to create directory.", session.ctrl_writer
-            )
+        if (session.gid != 0):
+            await self.send_response(550, "No access.", session.ctrl_writer)
+        else:
+            dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+            try:
+                mkdir(dirpath)
+                await self.send_response(
+                    257, f'"{dirpath}" directory created.', session.ctrl_writer
+                )
+            except OSError:
+                await self.send_response(
+                    550, "Failed to create directory.", session.ctrl_writer
+                )
         return True
 
     async def nlst(self, dirpath, session):
@@ -725,20 +713,6 @@ class FTPdLite:
         await self.send_response(200, "Take your time. I'll wait.", session.ctrl_writer)
         return True
 
-    async def no_permission(self, _, session):
-        """
-        Return an error. Used when the server is in readonly mode.
-
-        Args:
-            _ (discard): throw away parameters
-            session (object): the FTP client's login session info
-
-        Returns:
-            boolean: always True
-        """
-        await self.send_response(550, "No access.", session.ctrl_writer)
-        return True
-
     async def opts(self, option, session):
         """
         Reply to the common case of UTF-8, but nothing else. RFC-2389
@@ -783,8 +757,8 @@ class FTPdLite:
         # Next, decode the fields.
         if stored_credential.count(":") == 1:  # htpasswd-style
             user, pw = stored_credential.split(":")
-            uid = 1000  # anything not zero is an unprivileged user id
-            gid = 1000  # same applies for the group id
+            uid = 65534  # nobody
+            gid = 65534  # nogroup
         elif stored_credential.count(":") == 6:  # Unix-style
             user, pw, uid, gid, gecos, dir, shell = stored_credential.split(":")
             uid = int(uid)
@@ -944,15 +918,18 @@ class FTPdLite:
         Given a directory path, remove the directory. Must be empty.
         RFC-959 specifies as RKD, RFC-775 specifies as XRKD
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
-        try:
-            rmdir(dirpath)
-        except OSError:
-            await self.send_response(
-                550, "No such directory or directory not empty.", session.ctrl_writer
-            )
+        if (session.gid != 0):
+            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            await self.send_response(250, "OK.", session.ctrl_writer)
+            dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+            try:
+                rmdir(dirpath)
+            except OSError:
+                await self.send_response(
+                    550, "No such directory or directory not empty.", session.ctrl_writer
+                )
+            else:
+                await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
     async def site(self, param, session):
@@ -1166,28 +1143,31 @@ class FTPdLite:
         Given a file path, open a data connection and write the incoming
         stream data to the file. RFC-959
         """
-        filepath = FTPdLite.decode_path(session.cwd, filepath)
-        if await self.verify_data_connection(session) is False:
-            await self.send_response(
-                426, "Data connection closed. Transfer aborted.", session.ctrl_writer
-            )
+        if (session.gid != 0):
+            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            await self.send_response(150, "Transferring file.", session.ctrl_writer)
-            try:
-                with open(filepath, "wb") as file:
-                    while True:
-                        chunk = await session.data_reader.read(512)
-                        if chunk:
-                            file.write(chunk)
-                        else:
-                            break
-            except OSError:
+            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            if await self.verify_data_connection(session) is False:
                 await self.send_response(
-                    451, "Error writing file.", session.ctrl_writer
+                    426, "Data connection closed. Transfer aborted.", session.ctrl_writer
                 )
             else:
-                await self.send_response(226, "Transfer finished.", session.ctrl_writer)
-                await self.close_data_connection(session)
+                await self.send_response(150, "Transferring file.", session.ctrl_writer)
+                try:
+                    with open(filepath, "wb") as file:
+                        while True:
+                            chunk = await session.data_reader.read(512)
+                            if chunk:
+                                file.write(chunk)
+                            else:
+                                break
+                except OSError:
+                    await self.send_response(
+                        451, "Error writing file.", session.ctrl_writer
+                    )
+                else:
+                    await self.send_response(226, "Transfer finished.", session.ctrl_writer)
+                    await self.close_data_connection(session)
         return True
 
     async def stru(self, param, session):
