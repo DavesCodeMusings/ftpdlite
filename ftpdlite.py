@@ -28,6 +28,7 @@ from cryptolib import aes
 from hashlib import sha256
 from binascii import b2a_base64
 
+
 class Session:
     """
     An interactive connection from a client.
@@ -43,6 +44,7 @@ class Session:
         self._gid = 65534
         self._working_dir = getcwd()
         self._login_time = time()
+        self._last_active_time = time()
 
     @property
     def client_ip(self):
@@ -104,12 +106,21 @@ class Session:
     def login_time(self):
         return self._login_time
 
+    @property
+    def last_active_time(self):
+        return self._last_active_time
+
+    @last_active_time.setter
+    def last_active_time(self, time):
+        self._last_active_time = time
+
 
 class SHA256AES:
     """
     Password hashing for FTPdLite User Accounts.
     """
-    _method_token = "5a" # Totally made up. Not a standard.
+
+    _method_token = "5a"  # Totally made up. Not a standard.
 
     @staticmethod
     def generate_salt(length):
@@ -128,16 +139,16 @@ class SHA256AES:
         """
         Given a salt value and password in cleartext, return a hashed password.
         """
-        assert(len(salt) % 16 == 0)
+        assert len(salt) % 16 == 0
         cleartext = bytes(cleartext, "utf8")
         cleartext += bytearray(16 - (len(cleartext) % 16))  # Pad out to 16-byte boundry
         cipher = aes(salt, 1)  # 1 is MODE_ECB, the only one supported by MicroPython
         salted_pw = cipher.encrypt(cleartext)
-        return b2a_base64(sha256(salted_pw).digest()).decode('utf8').rstrip('\n')
+        return b2a_base64(sha256(salted_pw).digest()).decode("utf8").rstrip("\n")
 
     @staticmethod
     def create_passwd_entry(cleartext):
-        salt = SHA256AES.generate_salt(16) # Must be evenly divisible by 16 for AES
+        salt = SHA256AES.generate_salt(16)  # Must be evenly divisible by 16 for AES
         hashed_pw = SHA256AES.create_salted_hash(salt, cleartext)
         return f"${SHA256AES._method_token}${salt}${hashed_pw}"
 
@@ -537,7 +548,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        if (session.gid != 0):
+        if session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(session.cwd, filepath)
@@ -695,7 +706,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        if (session.gid != 0):
+        if session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(session.cwd, dirpath)
@@ -831,13 +842,15 @@ class FTPdLite:
             return False
 
         # Finally, validate the user's password.
-        if pw_stored.count("$") == 3:  # Hashed format is: $alg$salt$saltedHashedPassword
+        if (
+            pw_stored.count("$") == 3
+        ):  # Hashed format is: $alg$salt$saltedHashedPassword
             await self.debug(f"Checking {user} against hashed password: {pw_stored}")
             authenticated = SHA256AES.verify_passwd_entry(pw_stored, pw_entered)
         else:
             await self.debug(f"Checking {user} against cleartext password: ********")
-            authenticated = (pw_entered == pw_stored)  # Cleartext comparison.
-        
+            authenticated = pw_entered == pw_stored  # Cleartext comparison.
+
         if authenticated:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
             session.uid = uid
@@ -985,7 +998,7 @@ class FTPdLite:
         Given a directory path, remove the directory. Must be empty.
         RFC-959 specifies as RKD, RFC-775 specifies as XRKD
         """
-        if (session.gid != 0):
+        if session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(session.cwd, dirpath)
@@ -993,7 +1006,9 @@ class FTPdLite:
                 rmdir(dirpath)
             except OSError:
                 await self.send_response(
-                    550, "No such directory or directory not empty.", session.ctrl_writer
+                    550,
+                    "No such directory or directory not empty.",
+                    session.ctrl_writer,
                 )
             else:
                 await self.send_response(250, "OK.", session.ctrl_writer)
@@ -1210,13 +1225,15 @@ class FTPdLite:
         Given a file path, open a data connection and write the incoming
         stream data to the file. RFC-959
         """
-        if (session.gid != 0):
+        if session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(session.cwd, filepath)
             if await self.verify_data_connection(session) is False:
                 await self.send_response(
-                    426, "Data connection closed. Transfer aborted.", session.ctrl_writer
+                    426,
+                    "Data connection closed. Transfer aborted.",
+                    session.ctrl_writer,
                 )
             else:
                 await self.send_response(150, "Transferring file.", session.ctrl_writer)
@@ -1233,7 +1250,9 @@ class FTPdLite:
                         451, "Error writing file.", session.ctrl_writer
                     )
                 else:
-                    await self.send_response(226, "Transfer finished.", session.ctrl_writer)
+                    await self.send_response(
+                        226, "Transfer finished.", session.ctrl_writer
+                    )
                     await self.close_data_connection(session)
         return True
 
@@ -1291,6 +1310,27 @@ class FTPdLite:
             331, f"Password required for {username}.", session.ctrl_writer
         )
         return True
+
+    async def kick_stale(self, timeout):
+        """
+        Clean up inactive user sessions.
+
+        Args:
+            timeout (int): minutes of inactivity to allow before closing
+        """
+        await self.debug(
+            f"Stale session sweep scheduled with a {timeout} minute timeout."
+        )
+        timeout_seconds = timeout * 60
+        while True:
+            await sleep_ms(60000)
+            for s in self._session_list:
+                await self.debug(f"Checking session idle time for: {s.username}@{s.client_ip}")
+                if time() - s.last_active_time > timeout_seconds:
+                    print(f"Kicking stale session: {s}")
+                    await self.close_data_connection(s)
+                    await self.close_ctrl_connection(s)
+                    await self.delete_session(s)
 
     async def verify_data_connection(self, session):
         """
@@ -1418,6 +1458,7 @@ class FTPdLite:
                     await self.close_data_connection(session)
                     break
                 else:
+                    session.last_active_time = time()
                     verb, param = await self.parse_request(request)
                 try:
                     func = self._ftp_cmd_dict[verb]
@@ -1431,21 +1472,20 @@ class FTPdLite:
             await self.delete_session(session)
             session = None
 
-    def run(self, host="127.0.0.1", port=21, loop=None, debug=False):
+    def run(self, host="127.0.0.1", port=21, stale_timeout=60, loop=None, debug=False):
         """
         Start an asynchronous listener for FTP requests.
 
         Args:
-            host (string): the IP address of the interface on which to
-              listen (0.0.0.0 means all interfaces)
+            host (string): the IP address of the interface on which to listen
             port (int): the TCP port on which to listen
-            loop (object): the asyncio loop that the server should
-              insert itself into
+            stale_timeout (int): minutes of inactivity before a session is kicked
+            loop (object): asyncio loop that the server should insert itself into
             debug (boolean): True indicates verbose logging is desired
 
         Returns:
-            object: the same loop object given as a parameter or a new
-              one if no existing loop was passed
+            object: the same loop object given as a parameter or a new one if
+              no existing loop was passed
         """
         self._debug = debug
         now = time()
@@ -1462,4 +1502,5 @@ class FTPdLite:
         loop = get_event_loop()
         server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
         loop.create_task(server)
+        loop.create_task(self.kick_stale(stale_timeout))
         loop.run_forever()
