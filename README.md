@@ -80,7 +80,7 @@ There are some things to keep in mind:
 * htpasswd-style credentials are automatically assigned to gid 65534. So no write access.
 * Some commands, like `site kick` and `site reboot`, are only authorized for privileged accounts (group id 0).
 * The Unix-style GECOS, home, and login shell fields are just place holders. They have no effect on anything.
-* Password encryption is not supported... yet.
+* Hashed passwords can be used, but they are not in standard Unix format. See [sha256aes.py](https://github.com/DavesCodeMusings/ftpdlite/blob/main/sha256aes.py) for details.
 
 ### Start Your FTP Server
 Boot your microcontroller and point your FTP client to port 21.
