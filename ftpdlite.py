@@ -23,7 +23,10 @@ from network import hostname
 from socket import getaddrinfo, AF_INET
 from gc import collect, mem_alloc, mem_free
 from machine import reset
-
+from random import choice, seed
+from cryptolib import aes
+from hashlib import sha256
+from binascii import b2a_base64
 
 class Session:
     """
@@ -100,6 +103,62 @@ class Session:
     @property
     def login_time(self):
         return self._login_time
+
+
+class SHA256AES:
+    """
+    Password hashing for FTPdLite User Accounts.
+    """
+    _method_token = "5a" # Totally made up. Not a standard.
+
+    @staticmethod
+    def generate_salt(length):
+        """
+        Generate a random-character salt suitable for password hashing.
+        """
+        valid_chars = "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+        seed()
+        salt = ""
+        for i in range(length):
+            salt += choice(valid_chars)
+        return salt
+
+    @staticmethod
+    def create_salted_hash(salt, cleartext):
+        """
+        Given a salt value and password in cleartext, return a hashed password.
+        """
+        assert(len(salt) % 16 == 0)
+        cleartext = bytes(cleartext, "utf8")
+        cleartext += bytearray(16 - (len(cleartext) % 16))  # Pad out to 16-byte boundry
+        cipher = aes(salt, 1)  # 1 is MODE_ECB, the only one supported by MicroPython
+        salted_pw = cipher.encrypt(cleartext)
+        return b2a_base64(sha256(salted_pw).digest()).decode('utf8').rstrip('\n')
+
+    @staticmethod
+    def create_passwd_entry(cleartext):
+        salt = SHA256AES.generate_salt(16) # Must be evenly divisible by 16 for AES
+        hashed_pw = SHA256AES.create_salted_hash(salt, cleartext)
+        return f"${SHA256AES._method_token}${salt}${hashed_pw}"
+
+    @staticmethod
+    def verify_passwd_entry(hashed, cleartext):
+        """
+        Given a hashed password, verify the cleartext password is valid.
+        """
+        if hashed.count("$") != 3:
+            print("Invalid hashed password format.")
+            return False
+        else:
+            _, hash_alg, salt, hashed_pw = hashed.split("$")
+            if hash_alg != SHA256AES._method_token:
+                print("Unsupported hash algorithm.")
+            else:
+                rehashed_pw = SHA256AES.create_salted_hash(salt, cleartext)
+                if hashed_pw != rehashed_pw:
+                    return False
+                else:
+                    return True
 
 
 class FTPdLite:
@@ -730,12 +789,12 @@ class FTPdLite:
             await self.send_response(501, "Unknown option.", session.ctrl_writer)
         return True
 
-    async def passwd(self, password, session):
+    async def passwd(self, pw_entered, session):
         """
         Verify user credentials and drop the connection if incorrect. RFC-959
 
         Args:
-            password (string): the cleartext password
+            pw_entered (string): the cleartext password
             session (object): the FTP client's login session info
 
         Returns:
@@ -744,7 +803,7 @@ class FTPdLite:
         # First, find the user entry.
         for stored_credential in self._credentials:
             if stored_credential.startswith(session.username + ":"):
-                await self.debug(f"Found user entry: {stored_credential}")
+                await self.debug(f"Found user credential: {stored_credential}")
                 break
         else:
             print("User not found:", session.username)
@@ -756,32 +815,40 @@ class FTPdLite:
 
         # Next, decode the fields.
         if stored_credential.count(":") == 1:  # htpasswd-style
-            user, pw = stored_credential.split(":")
+            user, pw_stored = stored_credential.split(":")
             uid = 65534  # nobody
             gid = 65534  # nogroup
         elif stored_credential.count(":") == 6:  # Unix-style
-            user, pw, uid, gid, gecos, dir, shell = stored_credential.split(":")
+            user, pw_stored, uid, gid, gecos, dir, shell = stored_credential.split(":")
             uid = int(uid)
             gid = int(gid)
         else:
             print("Stored credential is invalid for:", session.username)
-            await self.send_response(
-                530, "Invalid username or password.", session.ctrl_writer
-            )
-            return False
-
-        # Finally, validate the user's password.
-        if session.username != user or password != pw:
             await sleep_ms(1000)
             await self.send_response(
                 430, "Invalid username or password.", session.ctrl_writer
             )
             return False
+
+        # Finally, validate the user's password.
+        if pw_stored.count("$") == 3:  # Hashed format is: $alg$salt$saltedHashedPassword
+            await self.debug(f"Checking {user} against hashed password: {pw_stored}")
+            authenticated = SHA256AES.verify_passwd_entry(pw_stored, pw_entered)
         else:
+            await self.debug(f"Checking {user} against cleartext password: ********")
+            authenticated = (pw_entered == pw_stored)  # Cleartext comparison.
+        
+        if authenticated:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
             session.uid = uid
             session.gid = gid
             return True
+        else:
+            await sleep_ms(1000)
+            await self.send_response(
+                430, "Invalid username or password.", session.ctrl_writer
+            )
+            return False
 
     async def pasv(self, _, session):
         """
