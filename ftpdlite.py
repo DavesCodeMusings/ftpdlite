@@ -299,6 +299,10 @@ class FTPdLite:
             path = ""  # client sent a commandline option, just ignore it
         if path is None or path == "" and empty_means_cwd is True:
             absolute_path = cwd
+        elif path == ".":
+            absolute_path = cwd
+        elif path == "..":
+            absolute_path = cwd.rsplit("/", 1)[0] or "/"
         elif path.startswith("/") is False:
             absolute_path = FTPdLite.path_join(cwd, path)
         else:
