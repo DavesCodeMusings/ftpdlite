@@ -85,7 +85,7 @@ Finally there is the hashed password. This allows you to protect password inform
 server.add_credential("felicia:$5a$gQt7ogusrX6DdrW4$OzJTc5KO9MljuwSUcV797EnAt8UzcKjCESWPziT5PV4=")
 ```
 
->Note: FTP sends usernames and passwords in cleartext and hashing can't help with that.
+>Note: FTP will send usernames and passwords in cleartext and hashing can't help with that.
 
 ### Starting the server
 You'll need the IP address of the interface where you want to serve FTP requests. This must be an address and not 0.0.0.0 (to specify any) as this will cause PASV transfers will break. The _debug_ option adds extra information to the serial console output. Set it to False or remove it to disable debug. The _idle_timeout_ option specifies the number of minutes a user session can be inactive before being disconnected.
