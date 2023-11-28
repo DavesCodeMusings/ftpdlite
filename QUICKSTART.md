@@ -48,6 +48,9 @@ server.run(host=wifi_ip_address, debug=True)
 ```
 _Figure 2: main.py_
 
+## Boot the Server
+Once you have the files uploaded and the credentials for WiFi and FTP users in place, you're ready to press RESET and boot the FTP server. Watch the serial console for informational messages.
+
 ## Deconstructing main.py
 There are three distinct sections in main.py.
 1. Creating a server instance
