@@ -2,18 +2,18 @@
 This guide shows how to get an FTPdLite server up and running with minimal fuss. All commands assume the use of MicroPython's MPRemote on a Windows system. For different tools and operating system, please adjust accordingly.
 
 ## Install FTPdLite with MIP
-This downloads ftpdlite.py to the microcontroller's /lib directory.
-
 ```
 py.exe -m mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
 ```
 
-## Upload boot.py
-The goal of boot.py is to get the microcontroller attached to the network and set the time via NTP.
+This downloads ftpdlite.py to the microcontroller's /lib directory.
 
+## Upload boot.py
 ```
 py.exe -m mpremote connect COM9 cp 'boot.py' ':boot.py'
 ```
+
+The goal of boot.py is to get the microcontroller attached to the network and set the time via NTP.
 
 ```
 from network import WLAN, STA_IF
@@ -29,11 +29,11 @@ settime()
 _Figure 1: boot.py_
 
 ## Upload main.py
-The main.py file creates users and starts the FTP server.
-
 ```
 py.exe -m mpremote connect COM9 cp 'main.py' ':main.py'
 ```
+
+The main.py file creates users and starts the FTP server.
 
 ```
 from ftpdlite import FTPdLite
