@@ -380,7 +380,7 @@ class FTPdLite:
         for i in range(len(self._session_list)):
             if self._session_list[i] == session:
                 await self.debug(
-                    f"delete_session({session}) deleted: {self._session_list[i]}"
+                    f"delete_session({session}) deleted: {self._session_list[i].username}@{self._session_list[i].client_ip}"
                 )
                 del self._session_list[i]
                 break
@@ -1111,7 +1111,9 @@ class FTPdLite:
             elif len(matching_sessions) > 1:
                 return 450, f"Multiple instances of {param} exist."
             else:
-                await self.debug(f"Kicking session {matching_sessions[0]}")
+                await self.debug(
+                    f"Kicking session {matching_sessions[0].username}@{matching_sessions[0].client_ip}"
+                )
                 await self.close_data_connection(matching_sessions[0])
                 await self.close_ctrl_connection(matching_sessions[0])
                 await self.delete_session(matching_sessions[0])
@@ -1326,7 +1328,9 @@ class FTPdLite:
         while True:
             await sleep_ms(60000)
             for s in self._session_list:
-                await self.debug(f"Checking session idle time for: {s.username}@{s.client_ip}")
+                await self.debug(
+                    f"Checking session idle time for: {s.username}@{s.client_ip}"
+                )
                 if time() - s.last_active_time > timeout_seconds:
                     print(f"Kicking stale session: {s}")
                     await self.close_data_connection(s)
