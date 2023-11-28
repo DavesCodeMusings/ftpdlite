@@ -10,7 +10,7 @@ This downloads ftpdlite.py to the microcontroller's /lib directory.
 
 ## Upload boot.py
 ```
-py.exe -m mpremote connect COM9 cp 'boot.py' ':boot.py'
+py.exe -m mpremote connect PORT cp 'boot.py' ':boot.py'
 ```
 
 The goal of boot.py is to get the microcontroller attached to the network and set the time via NTP.
@@ -30,7 +30,7 @@ _Figure 1: boot.py_
 
 ## Upload main.py
 ```
-py.exe -m mpremote connect COM9 cp 'main.py' ':main.py'
+py.exe -m mpremote connect PORT cp 'main.py' ':main.py'
 ```
 
 The main.py file creates users and starts the FTP server.
