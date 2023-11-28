@@ -190,6 +190,7 @@ class FTPdLite:
         self._start_time = time()
         self._session_list = []
         self._ftp_cmd_dict = {
+            "ALLO": self.noop,
             "CDUP": self.cdup,
             "CWD": self.cwd,
             "DELE": self.dele,
