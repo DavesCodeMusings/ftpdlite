@@ -226,6 +226,7 @@ class FTPdLite:
         }
 
         self._site_cmd_dict = {
+            "date": self.site_date,
             "df": self.site_df,
             "free": self.site_free,
             "gc": self.site_gc,
@@ -1042,6 +1043,14 @@ class FTPdLite:
             await self.send_response(status, output, session.ctrl_writer)
         return True
 
+    async def site_date(self, param, session):
+        if param == "help":
+            return 214, "show the system's current date and time"
+        else:
+            now = FTPdLite.date_format(time())
+            output = f"{now}"
+            return 211, output
+
     async def site_df(self, param, session):
         if param == "help":
             return 214, "report file system space usage"
@@ -1105,6 +1114,8 @@ class FTPdLite:
     async def site_kick(self, param, session):
         if param == "help":
             return 214, "disconnect a session by username or IP"
+        elif param == "":
+            return 501, "Missing parameter."
         elif session.gid != 0:
             return 550, "Not authorized."
         else:
