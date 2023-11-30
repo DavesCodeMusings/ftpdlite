@@ -13,7 +13,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 
 # Many thanks to:
 # D.J. Bernstein https://cr.yp.to/ftp.html for a clear explanation of FTP.
-# Peter Hinch (peterhinch) for the proper `await start_server()`` pattern.
+# Peter Hinch (peterhinch) for the proper `await start_server()` pattern.
 # Robert Hammelrath (robert-hh) for assistance with FileZilla compatibility.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
@@ -21,7 +21,7 @@ from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
 from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
-from gc import collect, mem_alloc, mem_free
+from gc import collect as gc_collect, mem_alloc, mem_free
 from machine import reset
 from random import choice, seed
 from cryptolib import aes
@@ -860,7 +860,9 @@ class FTPdLite:
             session.uid = uid
             session.gid = gid
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
-            await self.debug(f"user={session.username}, uid={session.uid}, gid={session.gid}")
+            await self.debug(
+                f"user={session.username}, uid={session.uid}, gid={session.gid}"
+            )
             return True
         else:
             await sleep_ms(1000)
@@ -1089,7 +1091,7 @@ class FTPdLite:
             return 214, "run garbage collection"
         else:
             before = mem_free()
-            collect()
+            gc_collect()
             after = mem_free()
             regained_kb = (after - before) // 1024
             output = f"Additional {regained_kb}KiB available."
@@ -1126,8 +1128,8 @@ class FTPdLite:
             elif len(matching_sessions) > 1:
                 return 450, f"Multiple instances of {param} exist."
             else:
-                await self.debug(
-                    f"Kicking session {matching_sessions[0].username}@{matching_sessions[0].client_ip}"
+                print(
+                    f"INFO: User {session.username} kicked session: {matching_sessions[0].username}@{matching_sessions[0].client_ip}"
                 )
                 await self.close_data_connection(matching_sessions[0])
                 await self.close_ctrl_connection(matching_sessions[0])
@@ -1473,7 +1475,9 @@ class FTPdLite:
                 try:
                     request = await ctrl_reader.read(self._request_buffer_size)
                 except OSError:  # Unexpected disconnection.
-                    print("ERROR: Control connection closed unexpectedly.")
+                    print(
+                        f"ERROR: Control connection closed for: {session.username}@{session.client_ip}"
+                    )
                     session_active = False
                     await self.close_data_connection(session)
                     break
@@ -1489,7 +1493,7 @@ class FTPdLite:
                 else:
                     session_active = await func(param, session)
             self.close_ctrl_connection(session)
-            print(f"INFO: {session.username}@{session.client_ip} has disconnected.")
+            print(f"INFO: Session disconnected: {session.username}@{session.client_ip}")
             await self.delete_session(session)
             session = None
 
