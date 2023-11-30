@@ -284,31 +284,33 @@ class FTPdLite:
         return output
 
     @staticmethod
-    def decode_path(cwd, path, empty_means_cwd=False):
+    def decode_path(cwd, path):
         """
         Given a file or directory path, validate it and return an absolute path.
 
         Args:
             cwd (string): the user session's current working directory
             path (string): a relative, absolute, or empty path to a resource
-            empty_means_cwd (boolean): flag to use CWD in place of empty path
 
         Returns:
             string: an absolute path to the resource
         """
-        if path is not None and path.startswith("-"):
-            path = ""  # client sent a commandline option, just ignore it
-        if path is None or path == "" and empty_means_cwd is True:
-            absolute_path = cwd
-        elif path == ".":
-            absolute_path = cwd
-        elif path == "..":
-            absolute_path = cwd.rsplit("/", 1)[0] or "/"
-        elif path.startswith("/") is False:
-            absolute_path = FTPdLite.path_join(cwd, path)
+        if path is None or path.startswith("-"):
+            absolute_path = cwd  # client sent a command-line option, do nothing
         else:
-            absolute_path = path
-        return absolute_path
+            if path.startswith("/") is True:
+                absolute_path = ""
+            else:
+                absolute_path = cwd
+            path_components = path.split("/")
+            for i in range(len(path_components)):
+                if path_components[i] == "." or path_components[i] == "":
+                    pass
+                elif path_components[i] == "..":
+                    absolute_path = absolute_path.rsplit("/", 1)[0] or ""
+                else:
+                    absolute_path = FTPdLite.path_join(absolute_path, path_components[i])
+        return absolute_path or "/"
 
     @staticmethod
     def path_join(*args):
@@ -554,7 +556,9 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        if session.gid != 0:
+        if not filepath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(session.cwd, filepath)
@@ -642,7 +646,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath, empty_means_cwd=True)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -711,7 +715,9 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        if session.gid != 0:
+        if not dirpath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(session.cwd, dirpath)
@@ -738,7 +744,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath, empty_means_cwd=True)
+        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -971,34 +977,37 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        filepath = FTPdLite.decode_path(session.cwd, filepath)
-        try:
-            stat(filepath)
-        except OSError:
-            await self.send_response(550, "No such file.", session.ctrl_writer)
+        if not filepath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
-            if await self.verify_data_connection(session) is False:
-                await self.send_response(
-                    426,
-                    "Data connection closed. Transfer aborted.",
-                    session.ctrl_writer,
-                )
+            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            try:
+                stat(filepath)
+            except OSError:
+                await self.send_response(550, "No such file.", session.ctrl_writer)
             else:
-                await self.send_response(150, "Transferring file.", session.ctrl_writer)
-                try:
-                    with open(filepath, "rb") as file:
-                        for chunk in FTPdLite.read_file_chunk(file):
-                            session.data_writer.write(chunk)
-                            await session.data_writer.drain()
-                except OSError:
+                if await self.verify_data_connection(session) is False:
                     await self.send_response(
-                        451, "Error reading file.", session.ctrl_writer
+                        426,
+                        "Data connection closed. Transfer aborted.",
+                        session.ctrl_writer,
                     )
                 else:
-                    await self.send_response(
-                        226, "Transfer finished.", session.ctrl_writer
-                    )
-                    await self.close_data_connection(session)
+                    await self.send_response(150, "Transferring file.", session.ctrl_writer)
+                    try:
+                        with open(filepath, "rb") as file:
+                            for chunk in FTPdLite.read_file_chunk(file):
+                                session.data_writer.write(chunk)
+                                await session.data_writer.drain()
+                    except OSError:
+                        await self.send_response(
+                            451, "Error reading file.", session.ctrl_writer
+                        )
+                    else:
+                        await self.send_response(
+                            226, "Transfer finished.", session.ctrl_writer
+                        )
+                        await self.close_data_connection(session)
         return True
 
     async def rmd(self, dirpath, session):
@@ -1006,7 +1015,9 @@ class FTPdLite:
         Given a directory path, remove the directory. Must be empty.
         RFC-959 specifies as RKD, RFC-775 specifies as XRKD
         """
-        if session.gid != 0:
+        if not dirpath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(session.cwd, dirpath)
@@ -1198,13 +1209,16 @@ class FTPdLite:
         Given a file path, reply with the number of bytes in the file.
         Defined in RFC-3659.
         """
-        filepath = FTPdLite.decode_path(session.cwd, filepath)
-        try:
-            size = stat(filepath)[6]
-        except OSError:
-            await self.send_response(550, "No such file.", session.ctrl_writer)
+        if not filepath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
-            await self.send_response(213, f"{size}", session.ctrl_writer)
+            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            try:
+                size = stat(filepath)[6]
+            except OSError:
+                await self.send_response(550, "No such file.", session.ctrl_writer)
+            else:
+                await self.send_response(213, f"{size}", session.ctrl_writer)
         return True
 
     async def stat(self, pathname, session):
@@ -1245,7 +1259,9 @@ class FTPdLite:
         Given a file path, open a data connection and write the incoming
         stream data to the file. RFC-959
         """
-        if session.gid != 0:
+        if not filepath:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(session.cwd, filepath)
