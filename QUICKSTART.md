@@ -1,5 +1,5 @@
 # FTPdLite QuickStart
-This guide shows how to get an FTPdLite server up and running with minimal fuss. All commands assume the use of MicroPython's MPRemote on a Windows system. Just replace _PORT_ with your microcontroller's COM port. For different development tools and operating system, please adjust accordingly.
+This guide shows how to get an FTPdLite server up and running with minimal fuss. All commands assume the use of MicroPython's MPRemote. Just replace _PORT_ with your microcontroller's COM port. For different development tools and operating system, please adjust accordingly.
 
 ## Install FTPdLite with MIP
 ```
