@@ -1,16 +1,16 @@
 # FTPdLite QuickStart
-This guide shows how to get an FTPdLite server up and running with minimal fuss. All commands assume the use of MicroPython's MPRemote on a Windows system. Just replace _PORT_ with your microcontroller's COM port. For different tools and operating system, please adjust accordingly.
+This guide shows how to get an FTPdLite server up and running with minimal fuss. All commands assume the use of MicroPython's MPRemote on a Windows system. Just replace _PORT_ with your microcontroller's COM port. For different development tools and operating system, please adjust accordingly.
 
 ## Install FTPdLite with MIP
 ```
-py.exe -m mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
+mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
 ```
 
 This downloads ftpdlite.py to the microcontroller's /lib directory.
 
 ## Upload boot.py
 ```
-py.exe -m mpremote connect PORT cp 'boot.py' ':boot.py'
+mpremote connect PORT cp 'boot.py' ':boot.py'
 ```
 
 The goal of boot.py is to get the microcontroller attached to the network and set the time via NTP.
@@ -30,7 +30,7 @@ _Figure 1: boot.py_
 
 ## Upload main.py
 ```
-py.exe -m mpremote connect PORT cp 'main.py' ':main.py'
+mpremote connect PORT cp 'main.py' ':main.py'
 ```
 
 The main.py file creates users and starts the FTP server.
