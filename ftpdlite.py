@@ -414,7 +414,7 @@ class FTPdLite:
         await self.debug(f"find_session({search_value}) found: {sessions_found}")
         return sessions_found
 
-    async def get_pasv_port(self):
+    def get_pasv_port(self):
         """
         Get a TCP port number from the pool, then rotate the list to ensure
         it won't be used again for a while. Helps avoid address in use error.
@@ -583,7 +583,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        port = await self.get_pasv_port()
+        port = self.get_pasv_port()
         await self.debug(f"Starting data listener on port: {port}")
         session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
@@ -890,7 +890,7 @@ class FTPdLite:
             boolean: always True
         """
         host_octets = self.host.replace(".", ",")
-        port = await self.get_pasv_port()
+        port = self.get_pasv_port()
         port_octet_high = port // 256
         port_octet_low = port % 256
         await self.debug(f"Starting data listener on port: {self.host}:{port}")
