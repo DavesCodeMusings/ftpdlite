@@ -371,7 +371,7 @@ class FTPdLite:
             self._credentials.append(credential)
             return True
 
-    async def debug(self, msg):
+    def debug(self, msg):
         if self._debug:
             print("DEBUG:", msg)
 
@@ -386,8 +386,10 @@ class FTPdLite:
         """
         for i in range(len(self._session_list)):
             if self._session_list[i] == session:
-                await self.debug(
-                    f"delete_session({session}) deleted: {self._session_list[i].username}@{self._session_list[i].client_ip}"
+                await self.close_data_connection(session)
+                await self.close_ctrl_connection(session)
+                self.debug(
+                    f"delete_session({session}) deleting: {session.username}@{session.client_ip}"
                 )
                 del self._session_list[i]
                 break
@@ -411,7 +413,7 @@ class FTPdLite:
             for s in self._session_list:
                 if s.username == search_value:
                     sessions_found.append(s)
-        await self.debug(f"find_session({search_value}) found: {sessions_found}")
+        self.debug(f"find_session({search_value}) found: {sessions_found}")
         return sessions_found
 
     def get_pasv_port(self):
@@ -426,7 +428,7 @@ class FTPdLite:
         self._pasv_port_pool.append(port)
         return port
 
-    async def parse_request(self, req_buffer):
+    def parse_request(self, req_buffer):
         """
         Given a line of input, split the command into a verb and parameter.
 
@@ -443,11 +445,11 @@ class FTPdLite:
         if request is None or len(request) == 0:
             verb = "QUIT"  # Filezilla doesn't send QUIT, just NULL.
             param = None
-            await self.debug("Received NULL command. Interpreting as QUIT.")
+            self.debug("Received NULL command. Interpreting as QUIT.")
         elif " " not in request:
             verb = request.upper()
             param = None
-            await self.debug(verb)
+            self.debug(verb)
         else:
             verb = request.split(None, 1)[0].upper()
             try:
@@ -455,9 +457,9 @@ class FTPdLite:
             except IndexError:
                 param = ""
             if verb == "PASS":
-                await self.debug("PASS ********")
+                self.debug("PASS ********")
             else:
-                await self.debug(f"{verb} {param}")
+                self.debug(f"{verb} {param}")
         return verb, param
 
     async def send_response(self, code, msg, writer):
@@ -475,7 +477,7 @@ class FTPdLite:
         """
         success = True
         if isinstance(msg, str):  # single line
-            await self.debug(f"{code} {msg}")
+            self.debug(f"{code} {msg}")
             try:
                 writer.write(f"{code} {msg}\r\n")
                 await writer.drain()
@@ -483,13 +485,13 @@ class FTPdLite:
                 success = False
         elif isinstance(msg, list):  # multi-line, dashes after code
             for line in range(len(msg) - 1):
-                await self.debug(f"{code}-{msg[line]}")
+                self.debug(f"{code}-{msg[line]}")
                 try:
                     writer.write(f"{code}-{msg[line]}\r\n")
                 except OSError:
                     success = False
                     break
-            await self.debug(f"{code} {msg[-1]}")
+            self.debug(f"{code} {msg[-1]}")
             try:
                 writer.write(f"{code} {msg[-1]}\r\n")  # last line, no dash
                 await writer.drain()
@@ -584,7 +586,7 @@ class FTPdLite:
             boolean: always True
         """
         port = self.get_pasv_port()
-        await self.debug(f"Starting data listener on port: {port}")
+        self.debug(f"Starting data listener on port: {port}")
         session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
@@ -824,7 +826,7 @@ class FTPdLite:
         # First, find the user entry.
         for stored_credential in self._credentials:
             if stored_credential.startswith(session.username + ":"):
-                await self.debug(f"Found user credential for: {session.username}")
+                self.debug(f"Found user credential for: {session.username}")
                 break
         else:
             print("ERROR: User not found:", session.username)
@@ -855,10 +857,10 @@ class FTPdLite:
         if (
             pw_stored.count("$") == 3
         ):  # Hashed format is: $alg$salt$saltedHashedPassword
-            await self.debug(f"Checking {user} against hashed password: {pw_stored}")
+            self.debug(f"Checking {user} against hashed password: {pw_stored}")
             authenticated = SHA256AES.verify_passwd_entry(pw_stored, pw_entered)
         else:
-            await self.debug(f"Checking {user} against cleartext password: ********")
+            self.debug(f"Checking {user} against cleartext password: ********")
             authenticated = pw_entered == pw_stored  # Cleartext comparison.
 
         if authenticated:
@@ -866,7 +868,7 @@ class FTPdLite:
             session.uid = uid
             session.gid = gid
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
-            await self.debug(
+            self.debug(
                 f"user={session.username}, uid={session.uid}, gid={session.gid}"
             )
             return True
@@ -893,7 +895,7 @@ class FTPdLite:
         port = self.get_pasv_port()
         port_octet_high = port // 256
         port_octet_low = port % 256
-        await self.debug(f"Starting data listener on port: {self.host}:{port}")
+        self.debug(f"Starting data listener on port: {self.host}:{port}")
         session.data_listener = await start_server(
             self.on_data_connect, self.host, port, 1
         )
@@ -914,14 +916,14 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        await self.debug(f"Port address: {address}")
+        self.debug(f"Port address: {address}")
         if address.count(",") != 5:
             await self.send_response(451, "Invalid parameter.", session.ctrl_writer)
         else:
             a = address.split(",")
             host = f"{a[0]}.{a[1]}.{a[2]}.{a[3]}"
             port = int(a[4]) * 256 + int(a[5])
-            await self.debug(f"Opening data connection to: {host}:{port}")
+            self.debug(f"Opening data connection to: {host}:{port}")
             try:
                 (
                     session.data_reader,
@@ -1133,7 +1135,7 @@ class FTPdLite:
             return 550, "Not authorized."
         else:
             matching_sessions = await self.find_session(param)
-            await self.debug(f"Found {len(matching_sessions)} sessions for {param}")
+            self.debug(f"Found {len(matching_sessions)} sessions for {param}")
             if len(matching_sessions) < 1:
                 return 450, "Not found."
             elif len(matching_sessions) > 1:
@@ -1142,8 +1144,6 @@ class FTPdLite:
                 print(
                     f"INFO: User {session.username} kicked session: {matching_sessions[0].username}@{matching_sessions[0].client_ip}"
                 )
-                await self.close_data_connection(matching_sessions[0])
-                await self.close_ctrl_connection(matching_sessions[0])
                 await self.delete_session(matching_sessions[0])
                 return 211, f"Kicked {param}"
 
@@ -1151,7 +1151,7 @@ class FTPdLite:
         if param == "help":
             return 214, "reboot the system"
         else:
-            await self.debug(
+            self.debug(
                 f"Reboot requested by: {session.username}@{session.client_ip} with UID:GID = {session.uid}:{session.gid}"
             )
             if session.uid != 0 and session.gid != 0:
@@ -1354,20 +1354,18 @@ class FTPdLite:
         Args:
             timeout (int): minutes of inactivity to allow before closing
         """
-        await self.debug(
+        self.debug(
             f"Stale session sweep scheduled with a {timeout} minute idle timeout."
         )
         while True:
             await sleep_ms(60000)
             for s in self._session_list:
                 idle_minutes = (time() - s.last_active_time) // 60
-                await self.debug(
+                self.debug(
                     f"Idle time for {s.username}@{s.client_ip} is {idle_minutes} minutes."
                 )
                 if idle_minutes > timeout:
                     print(f"INFO: Kicking stale session: {s.username}@{s.client_ip}")
-                    await self.close_data_connection(s)
-                    await self.close_ctrl_connection(s)
                     await self.delete_session(s)
 
     async def verify_data_connection(self, session):
@@ -1402,11 +1400,11 @@ class FTPdLite:
 
         Returns: nothing
         """
-        await self.debug("Closing data connection...")
+        self.debug("Closing data connection...")
         try:
             session.data_writer
         except AttributeError:
-            await self.debug("No data writer stream exists to be closed.")
+            self.debug("No data writer stream exists to be closed.")
         else:
             session.data_writer.close()
             await session.data_writer.wait_closed()
@@ -1414,7 +1412,7 @@ class FTPdLite:
         try:
             session.data_reader
         except AttributeError:
-            await self.debug("No data reader stream exists to be closed.")
+            self.debug("No data reader stream exists to be closed.")
         else:
             session.data_reader.close()
             await session.data_reader.wait_closed()
@@ -1422,13 +1420,12 @@ class FTPdLite:
         try:
             session.data_listener
         except AttributeError:
-            await self.debug("No data listener object exists to be closed.")
-            await self.debug("This is normal for PORT transfers.")
+            self.debug("No data listener object exists to be closed.")
         else:
             session.data_listener.close()
             await session.data_listener.wait_closed()
             del session.data_listener
-        await self.debug("Data connection closed.")
+        self.debug("Data connection closed.")
 
     async def on_data_connect(self, data_reader, data_writer):
         """
@@ -1439,7 +1436,7 @@ class FTPdLite:
             data_writer (stream): files/data requested by the client
         """
         client_ip, client_port = data_writer.get_extra_info("peername")
-        await self.debug(f"Data connection from: {client_ip}:{client_port}")
+        self.debug(f"Data connection from: {client_ip}:{client_port}")
         found_sessions = await self.find_session(client_ip)
         if len(found_sessions) != 1:  # should be only one per IP
             print("ERROR: Multiple sessions found for {client_ip}")
@@ -1447,8 +1444,8 @@ class FTPdLite:
             session = found_sessions[0]
             session.data_reader = data_reader
             session.data_writer = data_writer
-            await self.debug(f"session.data_reader = {session.data_reader}")
-            await self.debug(f"session.data_writer = {session.data_writer}")
+            self.debug(f"session.data_reader = {session.data_reader}")
+            self.debug(f"session.data_writer = {session.data_writer}")
 
     async def close_ctrl_connection(self, session):
         """
@@ -1463,7 +1460,7 @@ class FTPdLite:
         await session.ctrl_writer.wait_closed()
         session.ctrl_reader.close()
         await session.ctrl_reader.wait_closed()
-        await self.debug(f"Control connection closed for: {session.client_ip}")
+        self.debug(f"Control connection closed for: {session.client_ip}")
 
     async def on_ctrl_connect(self, ctrl_reader, ctrl_writer):
         """
@@ -1499,7 +1496,7 @@ class FTPdLite:
                     break
                 else:
                     session.last_active_time = time()
-                    verb, param = await self.parse_request(request)
+                    verb, param = self.parse_request(request)
                 try:
                     func = self._ftp_cmd_dict[verb]
                 except KeyError:
@@ -1511,7 +1508,7 @@ class FTPdLite:
             self.close_ctrl_connection(session)
             print(f"INFO: Session disconnected: {session.username}@{session.client_ip}")
             await self.delete_session(session)
-            session = None
+            del session
 
     def run(self, host="127.0.0.1", port=21, idle_timeout=60, loop=None, debug=False):
         """
