@@ -5,9 +5,9 @@ I've been working on an async FTP server and I thought I'd share. It's mostly fo
 A minimalist, mostly RFC 959 compliant, asyncio FTP server for MicroPython-based microcontrollers.
 
 ## How do I get it?
-You can use mpremote mip install github:DavesCodeMusings/ftpdlite
+You can use `mpremote mip install github:DavesCodeMusings/ftpdlite`
 
-Or you can visit the project site at https://github.com/DavesCodeMusings/ftpdlite/
+Or you can get ftpdlite.py directly from the project site at https://github.com/DavesCodeMusings/ftpdlite/
 
 ## For the love of God, man... why?
 FTP is one of the earliest internet protocols. It's a security nightmare, but it's a pretty straightforward way to get files from point A to point B. And MicroPython asyncio is something I've been interested in learning more about. So, why not?
