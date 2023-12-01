@@ -44,20 +44,20 @@ Remote directory: /
 ftp> ls
 227 Entering passive mode =192,168,10,57,192,8
 150 /
--rw-r--r--  1  root  root         629  Jan  1  2000  boot.py
--rw-r--r--  1  root  root         156  Jan  1  2000  config.py
--rw-r--r--  1  root  root         564  Nov 18 01:06  device_specs.py
-drwxr-xr-x  1  root  root           0  Jan  1  2000  lib/
--rw-r--r--  1  root  root         117  Nov 18 01:06  main.py
-drwxr-xr-x  1  root  root           0  Jan  1  2000  pub/
+-rw-rw-r--  1  root  root         629  Jan  1  2000  boot.py
+-rw-rw-r--  1  root  root         156  Jan  1  2000  config.py
+-rw-rw-r--  1  root  root         564  Nov 18 01:06  device_specs.py
+drwxrwxr-x  1  root  root           0  Jan  1  2000  lib/
+-rw-rw-r--  1  root  root         117  Nov 18 01:06  main.py
+drwxrwxr-x  1  root  root           0  Jan  1  2000  pub/
 226 Directory list sent.
 ftp> cd /pub
-250 /pub
+Working directory changed to: /pub
 ftp> ls
 227 Entering passive mode =192,168,10,57,192,1
-150 /pub
--rw-r--r--  1  root  root     3407402  Nov 18 01:12  Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
--rw-r--r--  1  root  root          21  Nov 18 01:06  test.txt
+150 Contents of: /pub
+-rw-rw-r--  1  root  root     3407402  Nov 18 01:12  Rick_Astley_-_Never_Gonna_Give_You_Up.mp3
+-rw-rw-r--  1  root  root          21  Nov 18 01:06  test.txt
 226 Directory list sent.
 ftp> less test.txt
 This is a test file.
@@ -69,13 +69,8 @@ ftp> site free
 211-         Total       Used      Avail
 211-Mem:    133KiB      52KiB      80KiB
 211 End.
-ftp> site gc
-211 Additional 68KiB available.
 ftp> rstat
 211-FTPdLite (MicroPython)
-211-System date: Nov 18 15:43
-211-Uptime: 0 days, 01:25
-211-Number of users: 1
 211-Connected to: ftpdlite
 211-Logged in as: Felicia
 211-TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream
