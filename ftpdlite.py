@@ -850,7 +850,7 @@ class FTPdLite:
             user, pw_stored = stored_credential.split(":")
             uid = 65534  # nobody
             gid = 65534  # nogroup
-            home = "/"
+            home = None
         elif stored_credential.count(":") == 6:  # Unix-style
             user, pw_stored, uid, gid, gecos, home, shell = stored_credential.split(":")
             uid = int(uid)
@@ -877,11 +877,19 @@ class FTPdLite:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
             session._uid = uid
             session._gid = gid
-            session._home_dir = home
+            session._home_dir = home or "/"
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
             self.debug(
                 f"user={session.username}, uid={session._uid}, gid={session._gid}"
             )
+            self.debug(f"Changing working directory to user home: {session.home}")
+            try:
+                stat(session.home)
+            except OSError:
+                self.debug("User home directory not present. Defaulting to: /")
+                session.cwd = "/"
+            else:
+                session.cwd = session.home
             return True
         else:
             await sleep_ms(1000)
