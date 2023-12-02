@@ -1,5 +1,5 @@
 # User Passwords
-FTPdLite give you the option of cleartext or hashed passwords. Cleartext is the most straightforward, but least secure. Cleartext passwords are visible to anyone who can view _main.py_ and this includes all users with an account. (Hint: they can just FTP main.py) Password hashing offers some additional protection in this scenario.
+FTPdLite gives you the option of cleartext or hashed passwords. Cleartext is the most straightforward, but least secure. Cleartext passwords are visible to anyone who can view _main.py_ and this includes all users with an account. (Hint: they can just FTP main.py) Password hashing offers some additional protection in this scenario.
 
 ## Hashing a Password
 If you just want to crank out some hashed user passwords, see [sha256aes.py](sha256aes.py) in this repository. You can change the username and cleartext password and then run it on your microcontroller to output a hashed password entry suitable for FTPdLite's `add_credential()`
