@@ -17,7 +17,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # Robert Hammelrath (robert-hh) for assistance with FileZilla compatibility.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
-from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs
+from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs, sync
 from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
@@ -569,7 +569,7 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
+        elif session._gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
@@ -676,7 +676,9 @@ class FTPdLite:
                     150, f"Contents of: {dirpath}", session.ctrl_writer
                 )
                 for entry in dir_entries:
-                    properties = stat(dirpath + "/" + entry)
+                    self.debug(f"Fetching properties of: {dirpath}/{entry}")
+                    self.debug(FTPdLite.path_join(dirpath, entry))
+                    properties = stat(FTPdLite.path_join(dirpath, entry))
                     if properties[0] & 0x4000:  # entry is a directory
                         permissions = "drwxrwxr-x"
                         size = 0
@@ -728,7 +730,7 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
+        elif session._gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
@@ -1040,7 +1042,7 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
+        elif session._gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
@@ -1152,7 +1154,7 @@ class FTPdLite:
             return 214, "disconnect a session by username or IP"
         elif param == "":
             return 501, "Missing parameter."
-        elif session.gid != 0:
+        elif session._gid != 0:
             return 550, "Not authorized."
         else:
             matching_sessions = await self.find_session(param)
@@ -1173,15 +1175,17 @@ class FTPdLite:
             return 214, "reboot the system"
         else:
             self.debug(
-                f"Reboot requested by: {session.username}@{session.client_ip} with UID:GID = {session.uid}:{session.gid}"
+                f"Reboot requested by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
             )
-            if session.uid != 0 and session.gid != 0:
+            if session._uid != 0 and session._gid != 0:
                 return 550, "Not authorized."
             else:
                 await self.send_response(
                     221, "Server going down for reboot.", session.ctrl_writer
                 )
+                sync()
                 await sleep_ms(1000)
+                sync()
                 reset()
 
     async def site_uptime(self, param, session):
@@ -1282,7 +1286,7 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
+        elif session._gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
