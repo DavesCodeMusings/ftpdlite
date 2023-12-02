@@ -42,6 +42,7 @@ class Session:
         self._username = "nobody"
         self._uid = 65534
         self._gid = 65534
+        self._home_dir = "/"
         self._working_dir = getcwd()
         self._login_time = time()
         self._last_active_time = time()
@@ -93,6 +94,10 @@ class Session:
     @username.setter
     def username(self, username):
         self._username = username
+
+    @property
+    def home(self):
+        return self._home_dir
 
     @property
     def cwd(self):
@@ -284,24 +289,26 @@ class FTPdLite:
         return output
 
     @staticmethod
-    def decode_path(cwd, path):
+    def decode_path(path, session):
         """
         Given a file or directory path, validate it and return an absolute path.
 
         Args:
-            cwd (string): the user session's current working directory
             path (string): a relative, absolute, or empty path to a resource
+            session (object): the FTP client's login session info
 
         Returns:
             string: an absolute path to the resource
         """
         if path is None or path.startswith("-"):
-            absolute_path = cwd  # client sent a command-line option, do nothing
+            absolute_path = session.cwd  # client sent a command-line option, do nothing
         else:
+            if path.startswith("~"):
+                path = path.replace("~", session.home)
             if path.startswith("/") is True:
                 absolute_path = ""
             else:
-                absolute_path = cwd
+                absolute_path = session.cwd
             path_components = path.split("/")
             for i in range(len(path_components)):
                 if path_components[i] == "." or path_components[i] == "":
@@ -309,7 +316,9 @@ class FTPdLite:
                 elif path_components[i] == "..":
                     absolute_path = absolute_path.rsplit("/", 1)[0] or ""
                 else:
-                    absolute_path = FTPdLite.path_join(absolute_path, path_components[i])
+                    absolute_path = FTPdLite.path_join(
+                        absolute_path, path_components[i]
+                    )
         return absolute_path or "/"
 
     @staticmethod
@@ -380,7 +389,7 @@ class FTPdLite:
         Given a session object, delete it from the server's session list.
 
         Args:
-            session (object): the client IP of interest
+            session (object): the client session of interest
 
         Returns: nothing
         """
@@ -530,7 +539,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+        dirpath = FTPdLite.decode_path(dirpath, session)
         try:
             properties = stat(dirpath)
         except OSError:
@@ -563,7 +572,7 @@ class FTPdLite:
         elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            filepath = FTPdLite.decode_path(filepath, session)
             try:
                 remove(filepath)
             except OSError:
@@ -648,7 +657,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+        dirpath = FTPdLite.decode_path(dirpath, session)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -722,7 +731,7 @@ class FTPdLite:
         elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+            dirpath = FTPdLite.decode_path(dirpath, session)
             try:
                 mkdir(dirpath)
                 await self.send_response(
@@ -746,7 +755,7 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+        dirpath = FTPdLite.decode_path(dirpath, session)
         try:
             dir_entries = listdir(dirpath)
         except OSError:
@@ -841,8 +850,9 @@ class FTPdLite:
             user, pw_stored = stored_credential.split(":")
             uid = 65534  # nobody
             gid = 65534  # nogroup
+            home = "/"
         elif stored_credential.count(":") == 6:  # Unix-style
-            user, pw_stored, uid, gid, gecos, dir, shell = stored_credential.split(":")
+            user, pw_stored, uid, gid, gecos, home, shell = stored_credential.split(":")
             uid = int(uid)
             gid = int(gid)
         else:
@@ -865,11 +875,12 @@ class FTPdLite:
 
         if authenticated:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
-            session.uid = uid
-            session.gid = gid
+            session._uid = uid
+            session._gid = gid
+            session._home_dir = home
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
             self.debug(
-                f"user={session.username}, uid={session.uid}, gid={session.gid}"
+                f"user={session.username}, uid={session._uid}, gid={session._gid}"
             )
             return True
         else:
@@ -982,7 +993,7 @@ class FTPdLite:
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
-            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            filepath = FTPdLite.decode_path(filepath, session)
             try:
                 stat(filepath)
             except OSError:
@@ -995,7 +1006,9 @@ class FTPdLite:
                         session.ctrl_writer,
                     )
                 else:
-                    await self.send_response(150, "Transferring file.", session.ctrl_writer)
+                    await self.send_response(
+                        150, "Transferring file.", session.ctrl_writer
+                    )
                     try:
                         with open(filepath, "rb") as file:
                             for chunk in FTPdLite.read_file_chunk(file):
@@ -1022,7 +1035,7 @@ class FTPdLite:
         elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            dirpath = FTPdLite.decode_path(session.cwd, dirpath)
+            dirpath = FTPdLite.decode_path(dirpath, session)
             try:
                 rmdir(dirpath)
             except OSError:
@@ -1212,7 +1225,7 @@ class FTPdLite:
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
-            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            filepath = FTPdLite.decode_path(filepath, session)
             try:
                 size = stat(filepath)[6]
             except OSError:
@@ -1264,7 +1277,7 @@ class FTPdLite:
         elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            filepath = FTPdLite.decode_path(session.cwd, filepath)
+            filepath = FTPdLite.decode_path(filepath, session)
             if await self.verify_data_connection(session) is False:
                 await self.send_response(
                     426,
