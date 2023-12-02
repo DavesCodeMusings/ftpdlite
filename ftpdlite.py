@@ -22,7 +22,7 @@ from time import localtime, mktime, time
 from network import hostname
 from socket import getaddrinfo, AF_INET
 from gc import collect as gc_collect, mem_alloc, mem_free
-from machine import reset
+from machine import deepsleep, reset
 from random import choice, seed
 from cryptolib import aes
 from hashlib import sha256
@@ -237,7 +237,7 @@ class FTPdLite:
             "gc": self.site_gc,
             "help": self.site_help,
             "kick": self.site_kick,
-            "reboot": self.site_reboot,
+            "shutdown": self.site_shutdown,
             "uptime": self.site_uptime,
             "who": self.site_who,
             "whoami": self.site_whoami,
@@ -1170,23 +1170,34 @@ class FTPdLite:
                 await self.delete_session(matching_sessions[0])
                 return 211, f"Kicked {param}"
 
-    async def site_reboot(self, param, session):
+    async def site_shutdown(self, param, session):
         if param == "help":
-            return 214, "reboot the system"
+            return 214, "halt (shutdown -h) or reboot (shutdown -r) the system"
         else:
             self.debug(
-                f"Reboot requested by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
+                f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
             )
             if session._uid != 0 and session._gid != 0:
                 return 550, "Not authorized."
             else:
-                await self.send_response(
-                    221, "Server going down for reboot.", session.ctrl_writer
-                )
+                print("INFO: Syncing filesystems.")
                 sync()
                 await sleep_ms(1000)
                 sync()
-                reset()
+                if param == "-h":
+                    await self.send_response(
+                        221, "Server going down for deep sleep.", session.ctrl_writer
+                    )
+                    await sleep_ms(1000)
+                    deepsleep()
+                elif param == "-r":
+                    await self.send_response(
+                        221, "Server going down for reboot.", session.ctrl_writer
+                    )
+                    await sleep_ms(1000)
+                    reset()
+                else:
+                    return 501, "Invalid parameter."
 
     async def site_uptime(self, param, session):
         if param == "help":
