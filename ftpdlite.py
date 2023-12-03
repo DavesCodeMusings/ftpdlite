@@ -35,6 +35,7 @@ class Session:
     """
 
     def __init__(self, client_ip, client_port, ctrl_reader, ctrl_writer):
+        self._accepting_connections = False
         self._client_ip = client_ip
         self._client_port = client_port
         self._ctrl_reader = ctrl_reader
@@ -1196,7 +1197,7 @@ class FTPdLite:
 
     async def site_shutdown(self, param, session):
         if param == "help":
-            return 214, "initiate system halt (-h) or reboot (-r)"
+            return 214, "refuse new connections, halt (-h), or reboot (-r)"
         else:
             self.debug(
                 f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
@@ -1208,6 +1209,9 @@ class FTPdLite:
                 sync()
                 await sleep_ms(1000)
                 sync()
+                if param is None or param == "":
+                    self._accepting_connections = False
+                    return 211, "Server will refuse new connections."
                 if param == "-h":
                     await self.send_response(
                         221, "Server going down for deep sleep.", session.ctrl_writer
@@ -1401,11 +1405,17 @@ class FTPdLite:
             boolean: always True
 
         """
-        session.username = username
-        await self.send_response(
-            331, f"Password required for {username}.", session.ctrl_writer
-        )
-        return True
+        if not self._accepting_connections and username != "root":
+            await self.send_response(
+                421, "Not accepting connections.", session.ctrl_writer
+            )
+            return False
+        else:
+            session.username = username
+            await self.send_response(
+                331, f"Password required for {username}.", session.ctrl_writer
+            )
+            return True
 
     async def kick_stale(self, timeout):
         """
@@ -1599,4 +1609,5 @@ class FTPdLite:
         server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
         loop.create_task(server)
         loop.create_task(self.kick_stale(idle_timeout))
+        self._accepting_connections = True
         loop.run_forever()
