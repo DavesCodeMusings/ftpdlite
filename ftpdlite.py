@@ -632,8 +632,8 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        features = ["Extensions supported:", "SIZE", "End."]
-        await self.send_response(211, features, session.ctrl_writer)
+        feat_output = ["Extensions supported:\r\n EPSV\r\n PASV\r\n SIZE", "End."]
+        await self.send_response(211, feat_output, session.ctrl_writer)
         return True
 
     async def help(self, _, session):
