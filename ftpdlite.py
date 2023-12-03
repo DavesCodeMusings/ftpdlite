@@ -322,6 +322,22 @@ class FTPdLite:
         return absolute_path or "/"
 
     @staticmethod
+    def human_readable(byte_size):
+        if byte_size > 1073741824:
+            size = byte_size / 1073741824
+            human_readable = f"{size:.2f}G"
+        elif byte_size > 1048576:
+            size = byte_size / 1048576
+            human_readable = f"{size:.2f}M"
+        elif byte_size > 1024:
+            size = byte_size / 1024
+            human_readable = f"{size:.2f}K"
+        else:
+            size = byte_size
+            human_readable = f"{size:d}"
+        return human_readable
+
+    @staticmethod
     def path_join(*args):
         """
         There's no os.path.join available in MicroPython, so...
@@ -681,15 +697,15 @@ class FTPdLite:
                     properties = stat(FTPdLite.path_join(dirpath, entry))
                     if properties[0] & 0x4000:  # entry is a directory
                         permissions = "drwxrwxr-x"
-                        size = 0
+                        size = "0"
                         entry += "/"
                     else:
                         permissions = "-rw-rw-r--"
-                        size = properties[6]
+                        size = FTPdLite.human_readable(properties[6])
                     uid = "root" if properties[4] == 0 else properties[4]
                     gid = "root" if properties[5] == 0 else properties[5]
                     mtime = FTPdLite.date_format(properties[8])
-                    formatted_entry = f"{permissions}  1  {uid:4}  {gid:4}  {size:10d}  {mtime:>11s}  {entry}"
+                    formatted_entry = f"{permissions}  1  {uid:4}  {gid:4}  {size:>10s}  {mtime:>11s}  {entry}"
                     session.data_writer.write(formatted_entry + "\r\n")
                 await session.data_writer.drain()
                 await self.send_response(
@@ -1093,19 +1109,27 @@ class FTPdLite:
         if param == "help":
             return 214, "report file system space usage"
         else:
-            properties = statvfs("/")
-            fragment_size = properties[1]
-            blocks_total = properties[2]
-            blocks_available = properties[4]
-            size_kb = int(blocks_total * fragment_size / 1024)
-            avail_kb = int(blocks_available * fragment_size / 1024)
-            used_kb = size_kb - avail_kb
-            percent_used = round(100 * used_kb / size_kb)
-            output = [
-                "Filesystem        Size        Used       Avail   Use%",
-                f"flash      {size_kb:8d}KiB {used_kb:8d}KiB {avail_kb:8d}KiB   {percent_used:3d}%",
-                "End.",
-            ]
+            param = param or "/"
+            try:
+                properties = statvfs(param)
+            except OSError:
+                return 501, "Invalid filesystem."
+            else:
+                fragment_size = properties[1]
+                blocks_total = properties[2]
+                blocks_available = properties[4]
+                size = int(blocks_total * fragment_size)
+                size_hr = FTPdLite.human_readable(size)
+                avail = int(blocks_available * fragment_size)
+                avail_hr = FTPdLite.human_readable(avail)
+                used = size - avail
+                used_hr = FTPdLite.human_readable(used)
+                percent_used = round(100 * used / size)
+                output = [
+                    "Filesystem        Size        Used       Avail      Use%",
+                    f"{param:12s}  {size_hr:>8s}    {used_hr:>8s}    {avail_hr:>8s}      {percent_used:3d}%",
+                    "End.",
+                ]
             return 211, output
 
     async def site_free(self, param, session):
@@ -1172,7 +1196,7 @@ class FTPdLite:
 
     async def site_shutdown(self, param, session):
         if param == "help":
-            return 214, "halt (shutdown -h) or reboot (shutdown -r) the system"
+            return 214, "initiate system halt (-h) or reboot (-r)"
         else:
             self.debug(
                 f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
