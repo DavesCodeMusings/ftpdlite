@@ -99,7 +99,7 @@ class Session:
     @property
     def uid(self):
         return self._uid
-    
+
     @uid.setter
     def uid(self, uid):
         self._uid = uid
@@ -107,11 +107,11 @@ class Session:
     @property
     def gid(self):
         return self._gid
-    
+
     @gid.setter
     def gid(self, gid):
         self._gid = gid
-        
+
     @property
     def home(self):
         return self._home_dir
@@ -406,12 +406,15 @@ class FTPdLite:
         Returns:
             True if credential format was acceptable, False if not.
         """
-        if credential.count(":") != 1 and credential.count(":") != 6:
-            print("ERROR: Invalid credential string.")
-            return False
-        else:
+        if credential.count(":") == 6:
+            self._credentials.append(credential)
+        elif credential.count(":") == 1:
+            credential += ":65534:65534::/:/bin/nologin"
             self._credentials.append(credential)
             return True
+        else:
+            print("ERROR: Invalid credential string.")
+            return False
 
     def debug(self, msg):
         if self._debug:
@@ -856,20 +859,20 @@ class FTPdLite:
             await self.send_response(501, "Unknown option.", session.ctrl_writer)
         return True
 
-    async def passwd(self, pw_entered, session):
+    async def passwd(self, pass_response, session):
         """
         Verify user credentials and drop the connection if incorrect. RFC-959
 
         Args:
-            pw_entered (string): the cleartext password
+            pass_response (string): the cleartext password
             session (object): the FTP client's login session info
 
         Returns:
             boolean: True if login succeeded, False if not
         """
         # First, find the user entry.
-        for stored_credential in self._credentials:
-            if stored_credential.startswith(session.username + ":"):
+        for cred in self._credentials:
+            if cred.startswith(session.username + ":"):
                 self.debug(f"Found user credential for: {session.username}")
                 break
         else:
@@ -881,15 +884,18 @@ class FTPdLite:
             return False
 
         # Next, decode the fields.
-        if stored_credential.count(":") == 1:  # htpasswd-style
-            user, pw_stored = stored_credential.split(":")
-            uid = 65534  # nobody
-            gid = 65534  # nogroup
-            home = None
-        elif stored_credential.count(":") == 6:  # Unix-style
-            user, pw_stored, uid, gid, gecos, home, shell = stored_credential.split(":")
-            uid = int(uid)
-            gid = int(gid)
+        if cred.count(":") == 6:  # Unix-style /etc/passwd entry
+            (
+                cred_user,
+                cred_pw,
+                cred_uid,
+                cred_gid,
+                cred_gecos,
+                cred_home,
+                cred_shell,
+            ) = cred.split(":")
+            cred_uid = int(cred_uid)
+            cred_gid = int(cred_gid)
         else:
             print("ERROR: Stored credential is invalid for:", session.username)
             await sleep_ms(1000)
@@ -899,24 +905,24 @@ class FTPdLite:
             return False
 
         # Finally, validate the user's password.
-        if (
-            pw_stored.count("$") == 3
-        ):  # Hashed format is: $alg$salt$saltedHashedPassword
-            self.debug(f"Checking {user} against hashed password: {pw_stored}")
-            authenticated = SHA256AES.verify_passwd_entry(pw_stored, pw_entered)
+        if cred_pw.count("$") == 3:  # Hashed format is: $alg$salt$saltedHashedPassword
+            self.debug(
+                f"Validating user {session.username} against hashed password: {cred_pw}"
+            )
+            authenticated = SHA256AES.verify_passwd_entry(cred_pw, pass_response)
         else:
-            self.debug(f"Checking {user} against cleartext password: ********")
-            authenticated = pw_entered == pw_stored  # Cleartext comparison.
+            self.debug(
+                f"Validating user {session.username} against cleartext password: ********"
+            )
+            authenticated = pass_response == cred_pw  # Cleartext comparison.
 
         if authenticated:
-            await self.send_response(230, "Login successful.", session.ctrl_writer)
-            session.uid = uid
-            session.gid = gid
-            session._home_dir = home or "/"
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
-            self.debug(
-                f"user={session.username}, uid={session.uid}, gid={session.gid}"
-            )
+            await self.send_response(230, "Login successful.", session.ctrl_writer)
+            session.uid = cred_uid
+            session.gid = cred_gid
+            session._home_dir = cred_home
+            self.debug(f"user={session.username}, uid={session.uid}, gid={session.gid}")
             self.debug(f"Changing working directory to user home: {session.home}")
             try:
                 stat(session.home)
