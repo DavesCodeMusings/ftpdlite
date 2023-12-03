@@ -675,7 +675,7 @@ class FTPdLite:
         """
         dirpath = FTPdLite.decode_path(dirpath, session)
         try:
-            dir_entries = listdir(dirpath)
+            dir_entries = sorted(listdir(dirpath))
         except OSError:
             await self.send_response(
                 451, "Unable to read directory.", session.ctrl_writer
@@ -775,7 +775,7 @@ class FTPdLite:
         """
         dirpath = FTPdLite.decode_path(dirpath, session)
         try:
-            dir_entries = listdir(dirpath)
+            dir_entries = sorted(listdir(dirpath))
         except OSError:
             await self.send_response(
                 451, "Unable to read directory.", session.ctrl_writer
