@@ -97,6 +97,22 @@ class Session:
         self._username = username
 
     @property
+    def uid(self):
+        return self._uid
+    
+    @uid.setter
+    def uid(self, uid):
+        self._uid = uid
+
+    @property
+    def gid(self):
+        return self._gid
+    
+    @gid.setter
+    def gid(self, gid):
+        self._gid = gid
+        
+    @property
     def home(self):
         return self._home_dir
 
@@ -586,7 +602,7 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session._gid != 0:
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
@@ -747,7 +763,7 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session._gid != 0:
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
@@ -894,12 +910,12 @@ class FTPdLite:
 
         if authenticated:
             await self.send_response(230, "Login successful.", session.ctrl_writer)
-            session._uid = uid
-            session._gid = gid
+            session.uid = uid
+            session.gid = gid
             session._home_dir = home or "/"
             print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
             self.debug(
-                f"user={session.username}, uid={session._uid}, gid={session._gid}"
+                f"user={session.username}, uid={session.uid}, gid={session.gid}"
             )
             self.debug(f"Changing working directory to user home: {session.home}")
             try:
@@ -1059,7 +1075,7 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session._gid != 0:
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
@@ -1179,7 +1195,7 @@ class FTPdLite:
             return 214, "disconnect a session by username or IP"
         elif param == "":
             return 501, "Missing parameter."
-        elif session._gid != 0:
+        elif session.gid != 0:
             return 550, "Not authorized."
         else:
             matching_sessions = await self.find_session(param)
@@ -1200,9 +1216,9 @@ class FTPdLite:
             return 214, "refuse new connections, halt (-h), or reboot (-r)"
         else:
             self.debug(
-                f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session._uid}:{session._gid}"
+                f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session.uid}:{session.gid}"
             )
-            if session._uid != 0 and session._gid != 0:
+            if session.uid != 0 and session.gid != 0:
                 return 550, "Not authorized."
             else:
                 print("INFO: Syncing filesystems.")
@@ -1325,7 +1341,7 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session._gid != 0:
+        elif session.gid != 0:
             await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
