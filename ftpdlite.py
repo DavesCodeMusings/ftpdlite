@@ -149,9 +149,7 @@ class Session:
         """
         if self.uid == 0 or self.gid == 10:  # root user or wheel group
             return True
-        elif self.uid >= 65534 or self.gid >= 65534:  # nobody user, group
-            return False
-        elif self.home and path.startswith(self.home):
+        elif self.gid == 100 and self.home and path.startswith(self.home):
             return True
         else:
             return False
