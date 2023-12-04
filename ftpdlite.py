@@ -15,6 +15,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # D.J. Bernstein https://cr.yp.to/ftp.html for a clear explanation of FTP.
 # Peter Hinch (peterhinch) for the proper `await start_server()` pattern.
 # Robert Hammelrath (robert-hh) for assistance with FileZilla compatibility.
+# ftp.freebsd.org for being there whenever I wondered how a server should behave.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
 from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs, sync
@@ -606,7 +607,7 @@ class FTPdLite:
                 session.cwd = dirpath
                 await self.send_response(
                     250,
-                    f"Working directory changed to: {session.cwd}",
+                    f"Working directory is now: {session.cwd}",
                     session.ctrl_writer,
                 )
         return True
