@@ -136,6 +136,25 @@ class Session:
     def last_active_time(self, time):
         self._last_active_time = time
 
+    def has_write_access(self, path):
+        """
+        Given a file or directory path, report if writing by the user is allowed.
+
+        Args:
+            path: the absolute file or directory path to verify
+
+        Returns:
+            boolean: True if writable by the user, false if not
+        """
+        if self.uid == 0 or self.gid == 10:  # root user or wheel group
+            return True
+        elif self.uid >= 65534 or self.gid >= 65534:  # nobody user, group
+            return False
+        elif self.home and path.startswith(self.home):
+            return True
+        else:
+            return False
+
 
 class SHA256AES:
     """
@@ -308,11 +327,11 @@ class FTPdLite:
     @staticmethod
     def decode_path(path, session):
         """
-        Given a file or directory path, validate it and return an absolute path.
+        Given a file or directory path, expand it to an absolute path.
 
         Args:
             path (string): a relative, absolute, or empty path to a resource
-            session (object): the FTP client's login session info
+            session (object): the FTP client's session with cwd and home dir
 
         Returns:
             string: an absolute path to the resource
@@ -409,7 +428,7 @@ class FTPdLite:
         if credential.count(":") == 6:
             self._credentials.append(credential)
         elif credential.count(":") == 1:
-            credential += ":65534:65534::/:/bin/nologin"
+            credential += ":65534:65534:::/bin/nologin"
             self._credentials.append(credential)
             return True
         else:
@@ -605,16 +624,17 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
-            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
-            try:
-                remove(filepath)
-            except OSError:
-                await self.send_response(550, "No such file.", session.ctrl_writer)
+            if session.has_write_access(filepath) is False:
+                await self.send_response(550, "No access.", session.ctrl_writer)
             else:
-                await self.send_response(250, "OK.", session.ctrl_writer)
+                try:
+                    remove(filepath)
+                except OSError:
+                    await self.send_response(550, "No such file.", session.ctrl_writer)
+                else:
+                    await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
     async def epsv(self, _, session):
@@ -766,19 +786,20 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
-            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
-            try:
-                mkdir(dirpath)
-                await self.send_response(
-                    257, f'"{dirpath}" directory created.', session.ctrl_writer
-                )
-            except OSError:
-                await self.send_response(
-                    550, "Failed to create directory.", session.ctrl_writer
-                )
+            if session.has_write_access(dirpath) is False:
+                await self.send_response(550, "No access.", session.ctrl_writer)
+            else:
+                try:
+                    mkdir(dirpath)
+                    await self.send_response(
+                        257, f'"{dirpath}" directory created.', session.ctrl_writer
+                    )
+                except OSError:
+                    await self.send_response(
+                        550, "Failed to create directory.", session.ctrl_writer
+                    )
         return True
 
     async def nlst(self, dirpath, session):
@@ -923,14 +944,17 @@ class FTPdLite:
             session.gid = cred_gid
             session._home_dir = cred_home
             self.debug(f"user={session.username}, uid={session.uid}, gid={session.gid}")
-            self.debug(f"Changing working directory to user home: {session.home}")
-            try:
-                stat(session.home)
-            except OSError:
-                self.debug("User home directory not present. Defaulting to: /")
+            if not session.home:
                 session.cwd = "/"
             else:
-                session.cwd = session.home
+                self.debug(f"Changing working directory to user home: {session.home}")
+                try:
+                    stat(session.home)
+                except OSError:
+                    self.debug("User home directory not present. Defaulting to: /")
+                    session.cwd = "/"
+                else:
+                    session.cwd = session.home
             return True
         else:
             await sleep_ms(1000)
@@ -1081,20 +1105,21 @@ class FTPdLite:
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
-            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            dirpath = FTPdLite.decode_path(dirpath, session)
-            try:
-                rmdir(dirpath)
-            except OSError:
-                await self.send_response(
-                    550,
-                    "No such directory or directory not empty.",
-                    session.ctrl_writer,
-                )
+            if session.has_write_access(dirpath) is False:
+                await self.send_response(550, "No access.", session.ctrl_writer)
             else:
-                await self.send_response(250, "OK.", session.ctrl_writer)
+                dirpath = FTPdLite.decode_path(dirpath, session)
+                try:
+                    rmdir(dirpath)
+                except OSError:
+                    await self.send_response(
+                        550,
+                        "No such directory or directory not empty.",
+                        session.ctrl_writer,
+                    )
+                else:
+                    await self.send_response(250, "OK.", session.ctrl_writer)
         return True
 
     async def site(self, param, session):
@@ -1224,7 +1249,7 @@ class FTPdLite:
             self.debug(
                 f"Shutdown request by: {session.username}@{session.client_ip} with UID:GID = {session.uid}:{session.gid}"
             )
-            if session.uid != 0 and session.gid != 0:
+            if session.uid != 0 and session.gid != 10:
                 return 550, "Not authorized."
             else:
                 print("INFO: Syncing filesystems.")
@@ -1347,35 +1372,38 @@ class FTPdLite:
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
-        elif session.gid != 0:
-            await self.send_response(550, "No access.", session.ctrl_writer)
         else:
-            filepath = FTPdLite.decode_path(filepath, session)
-            if await self.verify_data_connection(session) is False:
-                await self.send_response(
-                    426,
-                    "Data connection closed. Transfer aborted.",
-                    session.ctrl_writer,
-                )
+            if session.has_write_access(filepath) is False:
+                await self.send_response(550, "No access.", session.ctrl_writer)
             else:
-                await self.send_response(150, "Transferring file.", session.ctrl_writer)
-                try:
-                    with open(filepath, "wb") as file:
-                        while True:
-                            chunk = await session.data_reader.read(512)
-                            if chunk:
-                                file.write(chunk)
-                            else:
-                                break
-                except OSError:
+                filepath = FTPdLite.decode_path(filepath, session)
+                if await self.verify_data_connection(session) is False:
                     await self.send_response(
-                        451, "Error writing file.", session.ctrl_writer
+                        426,
+                        "Data connection closed. Transfer aborted.",
+                        session.ctrl_writer,
                     )
                 else:
                     await self.send_response(
-                        226, "Transfer finished.", session.ctrl_writer
+                        150, "Transferring file.", session.ctrl_writer
                     )
-                    await self.close_data_connection(session)
+                    try:
+                        with open(filepath, "wb") as file:
+                            while True:
+                                chunk = await session.data_reader.read(512)
+                                if chunk:
+                                    file.write(chunk)
+                                else:
+                                    break
+                    except OSError:
+                        await self.send_response(
+                            451, "Error writing file.", session.ctrl_writer
+                        )
+                    else:
+                        await self.send_response(
+                            226, "Transfer finished.", session.ctrl_writer
+                        )
+                        await self.close_data_connection(session)
         return True
 
     async def stru(self, param, session):
