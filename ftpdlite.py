@@ -1104,6 +1104,7 @@ class FTPdLite:
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
+            dirpath = FTPdLite.decode_path(dirpath, session)
             if session.has_write_access(dirpath) is False:
                 await self.send_response(550, "No access.", session.ctrl_writer)
             else:
