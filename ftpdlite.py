@@ -732,8 +732,7 @@ class FTPdLite:
                     150, f"Contents of: {dirpath}", session.ctrl_writer
                 )
                 for entry in dir_entries:
-                    self.debug(f"Fetching properties of: {dirpath}/{entry}")
-                    self.debug(FTPdLite.path_join(dirpath, entry))
+                    self.debug(f"Fetching properties of: {FTPdLite.path_join(dirpath, entry)}")
                     properties = stat(FTPdLite.path_join(dirpath, entry))
                     if properties[0] & 0x4000:  # entry is a directory
                         permissions = "drwxrwxr-x"
