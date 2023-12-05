@@ -47,7 +47,7 @@ Here are some scenarios to help it make sense:
 * If you want multiple users who can write only to their home directories, make their accounts with GID 100 (users).
 * If you want a read-only user who can't write anything at all, give them a UID that is not 0 and a GID that's not 0, 10, or 100.
 
-To assign uid, gid, and home directory location, you must use `add_credential()` with the seven-field, colon-separated Unix-style string.
+To assign uid, gid, and home directory location, you must use `add_credential()` with the seven-field, colon-separated, Unix-style string.
 
 ```
 server.add_credential("debbie:$5a$EbINmHbYCKCr0SAC$sBkCr6qrFPeQnZAp1y36lSrYieKghtbS1QTfGI5qkYM=:1001:100:/home/debbie:/bin/nologin")
