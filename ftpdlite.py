@@ -670,7 +670,10 @@ class FTPdLite:
         Returns:
             boolean: always True
         """
-        feat_output = ["Extensions supported:\r\n EPSV\r\n PASV\r\n SIZE", "End."]
+        feat_output = [
+            "Extensions supported:\r\n EPSV\r\n PASV\r\n SIZE\r\n UTF8",
+            "End.",
+        ]
         await self.send_response(211, feat_output, session.ctrl_writer)
         return True
 
@@ -731,7 +734,9 @@ class FTPdLite:
                     150, f"Contents of: {dirpath}", session.ctrl_writer
                 )
                 for entry in dir_entries:
-                    self.debug(f"Fetching properties of: {FTPdLite.path_join(dirpath, entry)}")
+                    self.debug(
+                        f"Fetching properties of: {FTPdLite.path_join(dirpath, entry)}"
+                    )
                     properties = stat(FTPdLite.path_join(dirpath, entry))
                     if properties[0] & 0x4000:  # entry is a directory
                         permissions = "drwxrwxr-x"
@@ -936,8 +941,10 @@ class FTPdLite:
             authenticated = pass_response == cred_pw  # Cleartext comparison.
 
         if authenticated:
-            print(f"INFO: Successful login for: {session.username}@{session.client_ip}")
-            await self.send_response(230, "Login successful.", session.ctrl_writer)
+            print(
+                f"INFO: Successful authentication for: {session.username}@{session.client_ip}"
+            )
+            output = ["Login successful."]
             session.uid = cred_uid
             session.gid = cred_gid
             session._home_dir = cred_home
@@ -953,6 +960,8 @@ class FTPdLite:
                     session.cwd = "/"
                 else:
                     session.cwd = session.home
+            output.append(f"Working directory is {session.cwd}")
+            await self.send_response(230, output, session.ctrl_writer)
             return True
         else:
             await sleep_ms(1000)
@@ -1183,12 +1192,12 @@ class FTPdLite:
         if param == "help":
             return 214, "display free and used memory"
         else:
-            free = mem_free() // 1024
-            used = mem_alloc() // 1024
-            total = (mem_free() + mem_alloc()) // 1024
+            free = FTPdLite.human_readable(mem_free())
+            used = FTPdLite.human_readable(mem_alloc())
+            total = FTPdLite.human_readable(mem_free() + mem_alloc())
             output = [
                 "         Total       Used      Avail",
-                f"Mem: {total:6d}KiB  {used:6d}KiB  {free:6d}KiB",
+                f"Mem: {total:>9s}  {used:>9s}  {free:>9s}",
                 "End.",
             ]
             return 211, output
@@ -1372,10 +1381,10 @@ class FTPdLite:
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
+            filepath = FTPdLite.decode_path(filepath, session)
             if session.has_write_access(filepath) is False:
                 await self.send_response(550, "No access.", session.ctrl_writer)
             else:
-                filepath = FTPdLite.decode_path(filepath, session)
                 if await self.verify_data_connection(session) is False:
                     await self.send_response(
                         426,
@@ -1602,7 +1611,10 @@ class FTPdLite:
             session = Session(client_ip, client_port, ctrl_reader, ctrl_writer)
             self._session_list.append(session)
             session_active = True  # Becomes False on QUIT or other disconnection event.
-            await self.send_response(220, self._server_name, ctrl_writer)
+            output = [f"{self._server_name} {FTPdLite.date_format(time())}"]
+            if self._idle_timeout:
+                output.append(f"Connection will close if idle for more than {self._idle_timeout} minutes.")
+            await self.send_response(220, output, ctrl_writer)
             while session_active:
                 try:
                     request = await ctrl_reader.read(self._request_buffer_size)
@@ -1657,6 +1669,8 @@ class FTPdLite:
         loop = get_event_loop()
         server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
         loop.create_task(server)
-        loop.create_task(self.kick_stale(idle_timeout))
+        if idle_timeout:
+            loop.create_task(self.kick_stale(idle_timeout))
+            self._idle_timeout = idle_timeout
         self._accepting_connections = True
         loop.run_forever()
