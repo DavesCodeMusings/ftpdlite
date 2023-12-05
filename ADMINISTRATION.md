@@ -59,7 +59,7 @@ There are also a number of SITE commands that anyone can use to perform system t
 * `SITE kick` to forcibly disconnect a session.
 * `SITE shutdown` to close down, deepsleep, or reboot the server.
 
-A user account must have a UID of 0 (root) or a GID of 0 (root) for these commands to succeed.
+A user account must have a UID of 0 (root) or a GID of 0 (root) for these privileged commands to succeed.
 
 The _root_ user also has the ability to log in after `SITE shutdown` has been issued to tell the server to stop accepting connections. Any other users, including those with a GID of 0, will be denied when trying to log in.
 
