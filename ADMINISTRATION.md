@@ -38,7 +38,7 @@ These defaults mean the user will have read-only access to the file system and c
 There are no permissions native to the flash file system or any microSD cards you might choose to attach. To get around this limitation, FTPdLite uses a combination of user ID, group ID, and home directory for the account to determine if write access is allowed. The criteria is detailed below.
 * If the account's UID is 0 (root user), writing is allowed anywhere.
 * If the GID is 10 (wheel group), writing is allowed anywhere.
-* If the account has a GID of 100 (users), the user is allowed to write to their home directory.
+* If the account has a GID of 100 (users) and the user is in their home directory, writing is allowed.
 * All other UID/GID combinations are readonly, no writing is allowed.
 
 Here are some scenarios to help it make sense:
