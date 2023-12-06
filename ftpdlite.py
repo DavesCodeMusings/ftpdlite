@@ -18,10 +18,8 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # ftp.freebsd.org for being there whenever I wondered how a server should behave.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
-from os import getcwd, listdir, mkdir, remove, rmdir, stat, statvfs, sync
-from time import localtime, mktime, time
-from network import hostname
-from socket import getaddrinfo, AF_INET
+from os import listdir, mkdir, remove, rmdir, stat, statvfs, sync
+from time import localtime, time
 from gc import collect as gc_collect, mem_alloc, mem_free
 from machine import deepsleep, reset
 from random import choice, seed
@@ -36,106 +34,17 @@ class Session:
     """
 
     def __init__(self, client_ip, client_port, ctrl_reader, ctrl_writer):
-        self._accepting_connections = False
-        self._client_ip = client_ip
-        self._client_port = client_port
-        self._ctrl_reader = ctrl_reader
-        self._ctrl_writer = ctrl_writer
-        self._username = "nobody"
-        self._uid = 65534
-        self._gid = 65534
-        self._home_dir = "/"
-        self._working_dir = getcwd()
-        self._login_time = time()
-        self._last_active_time = time()
-
-    @property
-    def client_ip(self):
-        return self._client_ip
-
-    @property
-    def client_port(self):
-        return self._client_port
-
-    @property
-    def ctrl_reader(self):
-        return self._ctrl_reader
-
-    @property
-    def ctrl_writer(self):
-        return self._ctrl_writer
-
-    @property
-    def data_reader(self):
-        return self._data_reader
-
-    @data_reader.setter
-    def data_reader(self, stream):
-        self._data_reader = stream
-
-    @data_reader.deleter
-    def data_reader(self):
-        del self._data_reader
-
-    @property
-    def data_writer(self):
-        return self._data_writer
-
-    @data_writer.setter
-    def data_writer(self, stream):
-        self._data_writer = stream
-
-    @data_writer.deleter
-    def data_writer(self):
-        del self._data_writer
-
-    @property
-    def username(self):
-        return self._username
-
-    @username.setter
-    def username(self, username):
-        self._username = username
-
-    @property
-    def uid(self):
-        return self._uid
-
-    @uid.setter
-    def uid(self, uid):
-        self._uid = uid
-
-    @property
-    def gid(self):
-        return self._gid
-
-    @gid.setter
-    def gid(self, gid):
-        self._gid = gid
-
-    @property
-    def home(self):
-        return self._home_dir
-
-    @property
-    def cwd(self):
-        return self._working_dir
-
-    @cwd.setter
-    def cwd(self, dirpath):
-        self._working_dir = dirpath
-
-    @property
-    def login_time(self):
-        return self._login_time
-
-    @property
-    def last_active_time(self):
-        return self._last_active_time
-
-    @last_active_time.setter
-    def last_active_time(self, time):
-        self._last_active_time = time
+        self.client_ip = client_ip
+        self.client_port = client_port
+        self.ctrl_reader = ctrl_reader
+        self.ctrl_writer = ctrl_writer
+        self.username = "nobody"
+        self.uid = 65534
+        self.gid = 65534
+        self.cwd = "/"
+        self.home = ""
+        self.login_time = time()
+        self.last_active_time = time()
 
     def has_write_access(self, path):
         """
@@ -947,7 +856,7 @@ class FTPdLite:
             output = ["Login successful."]
             session.uid = cred_uid
             session.gid = cred_gid
-            session._home_dir = cred_home
+            session.home = cred_home
             self.debug(f"user={session.username}, uid={session.uid}, gid={session.gid}")
             if not session.home:
                 session.cwd = "/"
@@ -1353,7 +1262,6 @@ class FTPdLite:
         if pathname is None or pathname == "":
             server_status = [
                 f"{self._server_name}",
-                f"Connected to: {hostname()}",
                 f"Logged in as: {session.username}",
                 "TYPE: L8, FORM: Nonprint; STRUcture: File; transfer MODE: Stream",
                 "End.",
@@ -1658,13 +1566,11 @@ class FTPdLite:
         """
         self._debug = debug
         now = time()
-        jan_1_2023 = mktime((2023, 1, 1, 0, 0, 0, 0, 1))
+        jan_1_2023 = 725846400  # mktime((2023, 1, 1, 0, 0, 0, 0, 1))
         if now < jan_1_2023:
             print("WARNING: System clock not set. File timestamps will be incorrect.")
-        addrinfo = getaddrinfo(host, port)[0]
-        assert addrinfo[0] == AF_INET, "ERROR: This server only supports IPv4."
-        self.host = addrinfo[-1][0]
-        self.port = addrinfo[-1][1]
+        self.host = host
+        self.port = port
         print(f"Listening on {self.host}:{self.port}")
         loop = get_event_loop()
         server = start_server(self.on_ctrl_connect, self.host, self.port, 5)
