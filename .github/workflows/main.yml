@@ -12,11 +12,9 @@ jobs:
         run: pip3 install mpy-cross
       - name: Compile bytecode
         run: python3 -m mpy_cross ftpdlite.py
-      - name: Create test file
-        run: date +%s > test.txt
-      - name: Commit test file
+      - name: Commit to repo
         run: |
           git config --global user.name 'DavesCodeMusings'
           git config --global user.email 'DavesCodeMusings@users.noreply.github.com'
-          git commit -am "Test file"
+          git commit -am "mpy_cross ftpdlite.py"
           git push
