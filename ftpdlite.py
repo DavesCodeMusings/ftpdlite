@@ -18,7 +18,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # ftp.freebsd.org for being there whenever I wondered how a server should behave.
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
-from os import listdir, mkdir, remove, rmdir, stat, statvfs, sync
+from os import listdir, mkdir, remove, rename, rmdir, stat, statvfs, sync
 from time import localtime, time
 from gc import collect as gc_collect, mem_alloc, mem_free
 from machine import deepsleep, reset
@@ -126,6 +126,9 @@ class FTPdLite:
     A minimalist FTP server for MicroPython.
     """
 
+    ENOENT = "No such file or directory."
+    EACCES = "No access."
+
     def __init__(
         self,
         pasv_port_range=range(49152, 49407),
@@ -159,6 +162,8 @@ class FTPdLite:
             "RMD": self.rmd,
             "QUIT": self.quit,
             "RETR": self.retr,
+            "RNFR": self.rnfr,
+            "RNTO": self.rnto,
             "SITE": self.site,
             "SIZE": self.size,
             "STAT": self.stat,
@@ -242,7 +247,7 @@ class FTPdLite:
             session (object): the FTP client's session with cwd and home dir
 
         Returns:
-            string: an absolute path to the resource
+            string: absolute path to resource
         """
         if path is None or path.startswith("-"):
             absolute_path = session.cwd  # client sent a command-line option, do nothing
@@ -290,7 +295,7 @@ class FTPdLite:
             *args (string): a variable number of path components
 
         Returns:
-            string: the resulting absolute path
+            string: resulting absolute path
         """
         path_result = ""
         for path_component in args:
@@ -353,8 +358,6 @@ class FTPdLite:
 
         Args:
             session (object): the client session of interest
-
-        Returns: nothing
         """
         for i in range(len(self._session_list)):
             if self._session_list[i] == session:
@@ -484,7 +487,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         session.cwd = session.cwd.rsplit("/", 1)[0] or "/"
         await self.send_response(250, session.cwd, session.ctrl_writer)
@@ -500,13 +503,13 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         dirpath = FTPdLite.decode_path(dirpath, session)
         try:
             properties = stat(dirpath)
         except OSError:
-            await self.send_response(550, "No such directory.", session.ctrl_writer)
+            await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
         else:
             if not properties[0] & 0x4000:
                 await self.send_response(550, "Not a directory.", session.ctrl_writer)
@@ -528,19 +531,19 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
             filepath = FTPdLite.decode_path(filepath, session)
             if session.has_write_access(filepath) is False:
-                await self.send_response(550, "No access.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.EACCES, session.ctrl_writer)
             else:
                 try:
                     remove(filepath)
                 except OSError:
-                    await self.send_response(550, "No such file.", session.ctrl_writer)
+                    await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
                 else:
                     await self.send_response(250, "OK.", session.ctrl_writer)
         return True
@@ -556,7 +559,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         port = self.get_pasv_port()
         self.debug(f"Starting data listener on port: {port}")
@@ -577,7 +580,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         feat_output = [
             "Extensions supported:\r\n EPSV\r\n PASV\r\n SIZE\r\n UTF8",
@@ -596,19 +599,18 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         commands = sorted(list(self._ftp_cmd_dict.keys()))
         help_output = ["Available FTP commands:"]
         line = ""
         for c in range(len(commands)):
-            line += f"{commands[c]:4s}   "
-            if (c + 1) % 9 == 0:
+            line += f"  {commands[c]:4s}"
+            if (c + 1) % 10 == 0:
                 help_output.append(line)
                 line = ""
         help_output.append(line)
         help_output.append("See SITE HELP for extra features.")
-        help_output.append("End.")
         await self.send_response(214, help_output, session.ctrl_writer)
         return True
 
@@ -622,7 +624,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         dirpath = FTPdLite.decode_path(dirpath, session)
         try:
@@ -674,7 +676,7 @@ class FTPdLite:
             param (string): single character to indicate transfer mode
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if param.upper() == "S":
             await self.send_response(200, "OK.", session.ctrl_writer)
@@ -694,14 +696,14 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if not dirpath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
             if session.has_write_access(dirpath) is False:
-                await self.send_response(550, "No access.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.EACCES, session.ctrl_writer)
             else:
                 try:
                     mkdir(dirpath)
@@ -724,7 +726,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         dirpath = FTPdLite.decode_path(dirpath, session)
         try:
@@ -770,7 +772,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         await self.send_response(200, "Take your time. I'll wait.", session.ctrl_writer)
         return True
@@ -784,7 +786,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if option.upper() == "UTF8 ON":
             await self.send_response(200, "Always in UTF8 mode.", session.ctrl_writer)
@@ -889,7 +891,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         host_octets = self.host.replace(".", ",")
         port = self.get_pasv_port()
@@ -914,7 +916,7 @@ class FTPdLite:
             address (string): comma-separated octets as specified in RFC-959
             session (object): the FTP client's login session info
         Returns:
-            boolean: always True
+            boolean: True
         """
         self.debug(f"Port address: {address}")
         if address.count(",") != 5:
@@ -947,7 +949,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         await self.send_response(257, f'"{session.cwd}"', session.ctrl_writer)
         return True
@@ -962,10 +964,66 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always False
+            boolean: False
         """
         await self.send_response(221, f"Bye, {session.username}.", session.ctrl_writer)
         return False
+
+    async def rnfr(self, rnfr_path, session):
+        """
+        Given a file path, store it in preparation for a rename operation.
+        RFC-959
+
+        Args:
+            rnfr_path (string): source path of the rename operation
+            session (object): the FTP client's login session info
+
+        Returns:
+            boolean: True
+        """
+        if not rnfr_path:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        else:
+            rnfr_path = FTPdLite.decode_path(rnfr_path, session)
+            try:
+                stat(rnfr_path)
+            except OSError:
+                await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
+            else:
+                session._rnfr_path = rnfr_path
+                await self.send_response(350, "RNFR accepted.", session.ctrl_writer)
+        return True
+
+    async def rnto(self, rnto_path, session):
+        """
+        Given a destination file path, complete the rename operation. RFC-959
+
+        Args:
+            rnto_path (string): destination path of the rename operation
+            session (object): the FTP client's login session info
+
+        Returns:
+            boolean: True
+        """
+        if not rnto_path:
+            await self.send_response(501, "Missing parameter.", session.ctrl_writer)
+        else:
+            rnto_path = FTPdLite.decode_path(rnto_path, session)
+            if session.has_write_access(rnto_path) is False:
+                await self.send_response(550, FTPdLite.EACCES, session.ctrl_writer)
+            else:
+                try:
+                    rename(session._rnfr_path, rnto_path)
+                except (AttributeError, OSError):
+                    await self.send_response(550, "Rename failed.", session.ctrl_writer)
+                else:
+                    await self.send_response(
+                        250,
+                        f"Renamed {session._rnfr_path} to {rnto_path}",
+                        session.ctrl_writer,
+                    )
+                del session._rnfr_path
+        return True
 
     async def retr(self, filepath, session):
         """
@@ -977,7 +1035,7 @@ class FTPdLite:
             session (object): the FTP client's login session info
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if not filepath:
             await self.send_response(501, "Missing parameter.", session.ctrl_writer)
@@ -986,7 +1044,7 @@ class FTPdLite:
             try:
                 stat(filepath)
             except OSError:
-                await self.send_response(550, "No such file.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
             else:
                 if await self.verify_data_connection(session) is False:
                     await self.send_response(
@@ -1024,7 +1082,7 @@ class FTPdLite:
         else:
             dirpath = FTPdLite.decode_path(dirpath, session)
             if session.has_write_access(dirpath) is False:
-                await self.send_response(550, "No access.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.EACCES, session.ctrl_writer)
             else:
                 dirpath = FTPdLite.decode_path(dirpath, session)
                 try:
@@ -1244,7 +1302,7 @@ class FTPdLite:
             try:
                 size = stat(filepath)[6]
             except OSError:
-                await self.send_response(550, "No such file.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
             else:
                 await self.send_response(213, f"{size}", session.ctrl_writer)
         return True
@@ -1257,7 +1315,7 @@ class FTPdLite:
             pathname (string): path to a file or directory
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if pathname is None or pathname == "":
             server_status = [
@@ -1271,9 +1329,7 @@ class FTPdLite:
             try:
                 properties = stat(pathname)
             except OSError:
-                await self.send_response(
-                    550, "No such file or directory.", session.ctrl_writer
-                )
+                await self.send_response(550, FTPdLite.ENOENT, session.ctrl_writer)
             else:
                 if properties[0] & 0x4000:  # entry is a directory
                     await self.send_response(213, f"{pathname}", session.ctrl_writer)
@@ -1291,7 +1347,7 @@ class FTPdLite:
         else:
             filepath = FTPdLite.decode_path(filepath, session)
             if session.has_write_access(filepath) is False:
-                await self.send_response(550, "No access.", session.ctrl_writer)
+                await self.send_response(550, FTPdLite.EACCES, session.ctrl_writer)
             else:
                 if await self.verify_data_connection(session) is False:
                     await self.send_response(
@@ -1330,7 +1386,7 @@ class FTPdLite:
             param (string): single character to indicate file structure
 
         Returns:
-            boolean: always True
+            boolean: True
         """
         if param.upper() == "F":
             await self.send_response(200, "OK.", session.ctrl_writer)
@@ -1368,7 +1424,7 @@ class FTPdLite:
             session (object): info about the client session, including streams
 
         Returns:
-            boolean: always True
+            boolean: True
 
         """
         if not self._accepting_connections and username != "root":
@@ -1433,8 +1489,6 @@ class FTPdLite:
 
         Args:
             session (object): info about the client session, including streams
-
-        Returns: nothing
         """
         self.debug("Closing data connection...")
         try:
@@ -1489,8 +1543,6 @@ class FTPdLite:
 
         Args:
             session (object): info about the client session, including streams
-
-        Returns: nothing
         """
         session.ctrl_writer.close()
         await session.ctrl_writer.wait_closed()
@@ -1505,8 +1557,6 @@ class FTPdLite:
         Args:
             ctrl_reader (stream): incoming commands from the client
             ctrl_writer (stream): replies from the server to the client
-
-        Returns: nothing
         """
         client_ip, client_port = ctrl_writer.get_extra_info("peername")
         print(f"INFO: Connection from client: {client_ip}")
@@ -1521,7 +1571,9 @@ class FTPdLite:
             session_active = True  # Becomes False on QUIT or other disconnection event.
             output = [f"{self._server_name} {FTPdLite.date_format(time())}"]
             if self._idle_timeout:
-                output.append(f"Connection will close if idle for more than {self._idle_timeout} minutes.")
+                output.append(
+                    f"Connection will close if idle for more than {self._idle_timeout} minutes."
+                )
             await self.send_response(220, output, ctrl_writer)
             while session_active:
                 try:
