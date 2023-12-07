@@ -11,7 +11,7 @@ jobs:
       - name: Install mpy-cross
         run: pip3 install mpy-cross
       - name: Compile bytecode
-        run: py -m mpy_cross ftpdlite.py
+        run: python3 -m mpy_cross ftpdlite.py
       - name: Create test file
         run: date +%s > test.txt
       - name: Commit test file
