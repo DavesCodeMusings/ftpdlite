@@ -12,9 +12,7 @@ jobs:
         run: pip3 install mpy-cross
       - name: Compile bytecode
         run: python3 -m mpy_cross ftpdlite.py
-      - name: Debug pipeline
-        run: git diff | wc -l
-      - name: Commit to repo
+      - name: Commit changes
         run: |
           if [ $(git diff | wc -l) -gt 0 ]; then
             git config --global user.name 'DavesCodeMusings'
