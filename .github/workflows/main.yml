@@ -1,0 +1,17 @@
+name: Push commit
+on: push
+permissions:
+  contents: write
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Create test file
+        run: date +%s > test.txt
+      - name: Commit test file
+        run: |
+          git config --global user.name 'DavesCodeMusings'
+          git config --global user.email 'DavesCodeMusings@users.noreply.github.com'
+          git commit -am "Test file"
+          git push
