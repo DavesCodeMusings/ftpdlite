@@ -1,6 +1,6 @@
 {
   "urls": [
-    ["ftpdlite.py", "github:DavesCodeMusings/ftpdlite/ftpdlite.py"]
+    ["ftpdlite.mpy", "github:DavesCodeMusings/ftpdlite/ftpdlite.mpy"]
   ],
   "version": "0.1.0"
 }
