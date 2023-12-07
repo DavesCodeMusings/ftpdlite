@@ -13,7 +13,7 @@ jobs:
       - name: Compile bytecode
         run: python3 -m mpy_cross ftpdlite.py
       - name: Debug pipeline
-        run: ls -l
+        run: git diff
       - name: Commit to repo
         run: |
           git config --global user.name 'DavesCodeMusings'
