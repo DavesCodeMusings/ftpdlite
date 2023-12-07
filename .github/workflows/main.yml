@@ -8,8 +8,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
-      - name: Install mpy-cross
-        run: pip3 install mpy-cross
+      - name: Install ruff and mpy-cross
+        run: pip3 install mpy-cross ruff
+      - name: Check lint and format
+        run: ruff check ftpdlite.py
       - name: Compile bytecode
         run: python3 -m mpy_cross ftpdlite.py
       - name: Commit changes
