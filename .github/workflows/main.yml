@@ -11,7 +11,7 @@ jobs:
       - name: Install ruff and mpy-cross
         run: pip3 install mpy-cross ruff
       - name: Check lint and format
-        run: ruff check ftpdlite.py
+        run: python3 -m ruff check ftpdlite.py
       - name: Compile bytecode
         run: python3 -m mpy_cross ftpdlite.py
       - name: Commit changes
