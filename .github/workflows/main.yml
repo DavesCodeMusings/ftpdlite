@@ -18,10 +18,11 @@ jobs:
         run: |
           pip3 install mpy-cross
           python3 -m mpy_cross $SRC_FILE
-      - name: Creating class doc...
-        run: |
-          pip3 install pdoc3
-          pdoc3 --force --skip-errors --html --output-dir=docs $SRC_FILE
+      # Hold until --skip-errors is fixed (https://github.com/pdoc3/pdoc/issues/421)
+      # - name: Creating class doc...
+      #   run: |
+      #     pip3 install pdoc3
+      #     pdoc3 --force --skip-errors --html --output-dir=docs $SRC_FILE
       - name: Committing changes...
         run: |
           if [ $(git diff | wc -l) -gt 0 ]; then
