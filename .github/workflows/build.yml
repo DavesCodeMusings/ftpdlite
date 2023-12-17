@@ -1,4 +1,4 @@
-name: Lint and compile bytecode
+name: Build
 on: push
 env:
   SRC_FILE: ftpdlite.py
