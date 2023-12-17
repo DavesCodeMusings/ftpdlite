@@ -3,6 +3,8 @@ _File systems in flight... FTPdLite!_
 
 **FTPdLite is a work in progress. See Caveats below to adjust your expectations.**
 
+[![Build ftpdlite](https://github.com/DavesCodeMusings/ftpdlite/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/DavesCodeMusings/ftpdlite/actions/workflows/main.yml)
+
 ## What is it?
 FTPdLite is an FTP server written in MicroPython using asyncio. The goal is to provide easy access to files on a microcontroller's flash file system without dragging out a USB cable. Or you can actually use it as a small, home FTP server.
 
