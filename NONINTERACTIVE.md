@@ -30,7 +30,7 @@ _Figure 2: Command-line download examples_
 Uploads can be done as well.
 
 ```
-curl -u ftpadmin --upload-file ANNOUNCE.md ftp://192.168.10.55/test.txt
+curl -u ftpadmin --upload-file test.txt ftp://192.168.10.55/test.txt
 Enter host password for user 'ftpadmin': ********
 ```
 _Figure 2: Command-line upload using curl_
