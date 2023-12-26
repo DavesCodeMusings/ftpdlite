@@ -2,7 +2,7 @@
 I've been working on an async FTP server and I thought I'd share. It's mostly for my own education, but it could be useful for some folks.
 
 ## What is it?
-A minimalist, mostly RFC 959 compliant, asyncio FTP server for MicroPython-based microcontrollers.
+A minimalist, mostly RFC-959 compliant, asyncio FTP server for MicroPython-based microcontrollers.
 
 ## How do I get it?
 You can use `mpremote mip install github:DavesCodeMusings/ftpdlite`

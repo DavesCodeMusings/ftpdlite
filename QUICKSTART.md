@@ -36,13 +36,10 @@ mpremote connect PORT cp 'main.py' ':main.py'
 The main.py file creates users and starts the FTP server.
 
 ```
-from ftpdlite import FTPdLite
-server = FTPdLite()
-
-server.add_credential("ftp:ftp")
-server.add_credential("root:Passw0rd:0:0:Super User:/:/bin/nologin")
-server.add_credential("felicia:$5a$gQt7ogusrX6DdrW4$OzJTc5KO9MljuwSUcV797EnAt8UzcKjCESWPziT5PV4=")
-
+from ftpdlite import FTPd
+server = FTPd()
+server.add_account("ftpadmin:changeme")
+server.add_account("ftp:ftp")
 wifi_ip_address = wlan.ifconfig()[0]
 server.run(host=wifi_ip_address, debug=True)
 ```
@@ -51,7 +48,7 @@ _Figure 2: main.py_
 ## Boot the Server
 Once you have the files uploaded and the credentials for WiFi and FTP users in place, you're ready to press RESET and boot the FTP server. Watch the serial console for informational messages.
 
-That's it. Fire up your FTP client and start FTPing.
+That's it. Fire up your FTP client, log in as _ftpadmin_ and start FTPing.
 
 ## Appendix: Deconstructing main.py
 There are three distinct sections in main.py.
@@ -63,29 +60,21 @@ There are three distinct sections in main.py.
 There's nothing special here. Similar to dozens of other MicroPython libraries, you import a class from a module and instantiate it with a name. In this case, the name is _server_.
 
 ```
-from ftpdlite import FTPdLite
-server = FTPdLite()
+from ftpdlite import FTPd
+server = FTPd()
 ```
+_Figure 3: Creating the server instance_
 
-### Adding user credentials
-FTPdLite gives you different ways to create users. You can pick and choose based on your needs.
+### Adding user accounts
+User accounts are written htpasswd-style, with the username, a colon separator, and the password. In the sample main.py, there are two accounts.
 
-First is the htpasswd-style. This is the simplest. It creates a user with readonly access to the FTP server and a cleartext password.
 ```
-server.add_credential("ftp:ftp")
+server.add_account("ftpadmin:changeme")
+server.add_account("ftp:ftp")
 ```
+_Figure 4: Creating multiple user accounts_
 
-Next is the Unix-style. This allows you to specify a UID and GID for the user. Users with GID 0 are given write access to the FTP server and can run commands to manage the server and its user sessions.
-```
-server.add_credential("root:Passw0rd:0:0:Super User:/:/bin/nologin")
-```
-
-Finally there is the hashed password. This allows you to protect password information on the flash filesystem. Both htpasswd-style and Unix-style can use the hashed password.
-```
-server.add_credential("felicia:$5a$gQt7ogusrX6DdrW4$OzJTc5KO9MljuwSUcV797EnAt8UzcKjCESWPziT5PV4=")
-```
-
->Note: FTP will send usernames and passwords in cleartext and hashing can't help with that.
+When creating user accounts, the first account created will have read-write access. Any remaining accounts will be restricted to read-only. The account names don't matter, only the order of creation.
 
 ### Starting the server
 You'll need the IP address of the interface where you want to serve FTP requests. This must be an address and not 0.0.0.0 (to specify any) as this will cause PASV transfers will break. The _debug_ option adds extra information to the serial console output. Set it to False or remove it to disable debug. The _idle_timeout_ option specifies the number of minutes a user session can be inactive before being disconnected.
@@ -94,3 +83,4 @@ You'll need the IP address of the interface where you want to serve FTP requests
 wifi_ip_address = wlan.ifconfig()[0]
 server.run(host=wifi_ip_address, debug=True, idle_timeout=60)
 ```
+_Figure 5: Starting the FTP server_
