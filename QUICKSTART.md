@@ -6,7 +6,7 @@ This guide shows how to get an FTPdLite server up and running with minimal fuss.
 mpremote connect PORT mip install github:DavesCodeMusings/ftpdlite
 ```
 
-This downloads ftpdlite.py to the microcontroller's /lib directory.
+This downloads ftpdlite.mpy to the microcontroller's /lib directory.
 
 ## Upload boot.py
 ```
