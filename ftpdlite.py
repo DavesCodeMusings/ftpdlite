@@ -605,7 +605,7 @@ class FTPdLite:
             try:
                 admin_user = self._accounts[0].split(":")[0]
             except IndexError:
-                admin_user = "root"
+                admin_user = "ftpadmin"
             if username == admin_user:
                 self.debug(f"User {username} has admin privileges.")
                 session.uid = 0
