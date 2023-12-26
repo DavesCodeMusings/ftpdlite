@@ -42,6 +42,7 @@ Only the user with read-write access can perform these privileged actions.
 If you're intending to use FTPdLite to offer more than a handful of files, you can attach a microSD card socket to the system. With this, you'll get multiple gigabytes of cheap storage and you won't risk wear and tear on your microcontroller's flash RAM.
 
 This bit of MicroPython in your _boot.py_ is an example of how to do that:
+
 ```
 from machine import Pin, SDCard
 from os import VfsFat, mount
