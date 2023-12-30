@@ -2,12 +2,12 @@
 Microcontrollers are not multi-user systems.
 * There's no /etc/passwd to track individual user accounts.
 * Their flash file systems have no file ownership or permissions.
-* They don't have much storage space.
+* They don't have much RAM or storage space.
 
 All of this presents a unique challenge when trying to make a microcontroller behave like an FTP server. Below are the solutions offered by FTPdLite:
 
 ## User Accounts
-FTPdLite can be run without specifying user accounts. In this scenario, it acts like an anonymous FTP site. Anyone can log in without a password and download files, but no one has write access. Most people will want to set up at least one account.
+FTPdLite can be run without specifying user accounts. In this scenario, it acts like an anonymous FTP site. Anyone can log in without a password and download files, but only one account (ftpadmin) is permitted to upload. Most people will want to set up at least one account.
 
 Setting up accounts is done with the `add_account()` method in _main.py_.
 
@@ -15,12 +15,12 @@ Here's an example:
 
 ```
 server = FTPd()
-server.add_credential("root:root")
+server.add_credential("ftpadmin:Secr3t")
 server.add_credential("ftp:ftp")
 ```
 _Figure 1: Example of two accounts with cleartext passwords_
 
-Accounts are created using the htpasswd style with the format of: username, a colon separator, and the password.
+Accounts are created using the htpasswd style with the format of: username, a colon separator, and the password. Passwords may be stored as hashed or cleartext. An example of each is shown below. For more on hashed passwords, see [PASSWORDS.md](PASSWORDS.md)
 
 ```
 server.add_credential("felicia:$5a$EbINmHbYCKCr0SAC$sBkCr6qrFPeQnZAp1y36lSrYieKghtbS1QTfGI5qkYM=")
@@ -32,11 +32,14 @@ _Figure 2: Example of two accounts, the first with a hashed password._
 The first user account created will be given read-write access to all files on the microcontroller's filesystem. Any additional accounts will be given read-only access. In the example of Figure 2 above, user _felicia_ can upload and download files, delete files, create and remove directories. User _craig_ can only download files.
 
 ## System Administration Privileges
-There are also a number of SITE commands that anyone can use to perform system tasks like you might do at a shell prompt. Type `SITE help` to get a list with descriptions. There are also two that require privileged access are:
+There are also a number of SITE commands that anyone can use to perform system tasks like you might do at a shell prompt. Type `SITE help` to get a list with descriptions. There are two that require privileged access to perform. These are:
 * `SITE kick` to forcibly disconnect a session.
 * `SITE shutdown` to deepsleep or reboot the server.
 
 Only the user with read-write access can perform these privileged actions.
+
+## Additional RAM
+FTPdLite with one or two user accounts is not very memory intensive, but if you're planning to serve files to a large number of simultaneous users, consider a microcontroller with PSRAM and a MicroPython image that supports it. Though for most people, this won't be required.
 
 ## Expanded Storage Space
 If you're intending to use FTPdLite to offer more than a handful of files, you can attach a microSD card socket to the system. With this, you'll get multiple gigabytes of cheap storage and you won't risk wear and tear on your microcontroller's flash RAM.
