@@ -1,5 +1,8 @@
 name: Build
-on: push
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
 env:
   SRC_FILE: ftpdlite.py
 permissions:
