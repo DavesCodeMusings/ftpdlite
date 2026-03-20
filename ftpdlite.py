@@ -5,7 +5,7 @@ File systems in flight... FTPdLite!
 FTPdLite is a minimalist, mostly RFC-959 compliant, MicroPython FTP
 server for 99% of your microcontroller file transferring needs.
 
-(c)2023 David Horton.
+(c)2023-2026 David Horton.
 Released under the BSD-2-Clause license.
 Project site: https://github.com/DavesCodeMusings/ftpdlite
 
