@@ -16,6 +16,7 @@ Project site: https://github.com/DavesCodeMusings/ftpdlite
 # Peter Hinch (peterhinch) for the proper `await start_server()` pattern.
 # Robert Hammelrath (robert-hh) for assistance with FileZilla compatibility.
 # ftp.freebsd.org for being there whenever I wondered how a server should behave.
+# Arseniy Terekhin (senyai) for code review and bug identification.
 
 
 from asyncio import get_event_loop, open_connection, sleep_ms, start_server
@@ -800,7 +801,6 @@ class FTPd(FTPdLite):
                 "HELP": self.help,
                 "LIST": self.list,
                 "MKD": self.mkd,
-                "MODE": self.mode,
                 "NLST": self.nlst,
                 "OPTS": self.opts,
                 "PWD": self.pwd,
@@ -1118,22 +1118,6 @@ class FTPd(FTPdLite):
                     await self.send_response(
                         session, 550, "Failed to create directory."
                     )
-        return True
-
-    async def mode(self, session, param):
-        """
-        This server (and most others) only supports stream mode. RFC-959
-
-        Args:
-            param (string): single character to indicate transfer mode
-
-        Returns:
-            boolean: True
-        """
-        if param.upper() == "S":
-            await self.send_response(session, 200, "OK.")
-        else:
-            await self.send_response(session, 504, "Transfer mode not supported.")
         return True
 
     async def nlst(self, session, dirpath):
