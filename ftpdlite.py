@@ -627,15 +627,15 @@ class FTPdLite:
         try:
             session.data_reader
             session.data_writer  # should exist when data connection is up
+            return True
         except AttributeError:
             await sleep_ms(200)  # if not, wait and try again
         try:
             session.data_reader
             session.data_writer
+            return True
         except AttributeError:
             return False
-        else:
-            return True
 
     def get_pasv_port(self):
         """
