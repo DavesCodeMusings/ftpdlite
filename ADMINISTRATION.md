@@ -14,17 +14,17 @@ Setting up accounts is done with the `add_account()` method in _main.py_.
 Here's an example:
 
 ```
-server = FTPd()
-server.add_credential("ftpadmin:Secr3t")
-server.add_credential("ftp:ftp")
+server = FTPd(host=wifi_ip_address)
+server.add_account("ftpadmin:Secr3t")
+server.add_account("ftp:ftp")
 ```
 _Figure 1: Example of two accounts with cleartext passwords_
 
 Accounts are created using the htpasswd style with the format of: username, a colon separator, and the password. Passwords may be stored as hashed or cleartext. An example of each is shown below. For more on hashed passwords, see [PASSWORDS.md](PASSWORDS.md)
 
 ```
-server.add_credential("felicia:$5a$EbINmHbYCKCr0SAC$sBkCr6qrFPeQnZAp1y36lSrYieKghtbS1QTfGI5qkYM=")
-server.add_credential("craig:Passw0rd")
+server.add_account("felicia:$5a$EbINmHbYCKCr0SAC$sBkCr6qrFPeQnZAp1y36lSrYieKghtbS1QTfGI5qkYM=")
+server.add_account("craig:Passw0rd")
 ```
 _Figure 2: Example of two accounts, the first with a hashed password._
 
