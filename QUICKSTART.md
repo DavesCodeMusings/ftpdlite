@@ -37,11 +37,11 @@ The main.py file creates users and starts the FTP server.
 
 ```
 from ftpdlite import FTPd
-server = FTPd()
+wifi_ip_address = wlan.ifconfig()[0]
+server = FTPd(host=wifi_ip_address)
 server.add_account("ftpadmin:changeme")
 server.add_account("ftp:ftp")
-wifi_ip_address = wlan.ifconfig()[0]
-server.run(host=wifi_ip_address, debug=True)
+server.run()
 ```
 _Figure 2: main.py_
 
@@ -57,11 +57,14 @@ There are three distinct sections in main.py.
 3. Starting the server 
 
 ### Creating a server instance
-There's nothing special here. Similar to dozens of other MicroPython libraries, you import a class from a module and instantiate it with a name. In this case, the name is _server_.
+Similar to dozens of other MicroPython libraries, you import a class from a module and instantiate it with a name. In this case, the name is _server_.
+
+You must provide an address value to _host_, otherwise your server will only listen on 127.0.0.1. This must be an actual address and not 0.0.0.0 (to specify any) as this will cause PASV transfers will break.
 
 ```
 from ftpdlite import FTPd
-server = FTPd()
+wifi_ip_address = wlan.ifconfig()[0]
+server = FTPd(host=wifi_ip_address)
 ```
 _Figure 3: Creating the server instance_
 
@@ -77,10 +80,9 @@ _Figure 4: Creating multiple user accounts_
 When creating user accounts, the first account created will have read-write access. Any remaining accounts will be restricted to read-only. The account names don't matter, only the order of creation.
 
 ### Starting the server
-You'll need the IP address of the interface where you want to serve FTP requests. This must be an address and not 0.0.0.0 (to specify any) as this will cause PASV transfers will break. The _debug_ option adds extra information to the serial console output. Set it to False or remove it to disable debug. The _idle_timeout_ option specifies the number of minutes a user session can be inactive before being disconnected.
+The `run()` method will start up the server and listen for connections.
 
 ```
-wifi_ip_address = wlan.ifconfig()[0]
-server.run(host=wifi_ip_address, debug=True, idle_timeout=60)
+server.run()
 ```
 _Figure 5: Starting the FTP server_
