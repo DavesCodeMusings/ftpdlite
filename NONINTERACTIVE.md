@@ -5,11 +5,11 @@ If your only use case is for scripted FTP transactions, FTPdLite offeres a minim
 
 ```
 from ftpdlite import FTPdLite
-server = FTPdLite()
+server = FTPdLite(host=wifi_ip_address)
 server.add_account("ftpadmin:changeme")
 server.add_account("ftp:ftp")
 wifi_ip_address = wlan.ifconfig()[0]
-server.run(host=wifi_ip_address, debug=True)
+server.run()
 ```
 _Figure 1: main.py_
 
