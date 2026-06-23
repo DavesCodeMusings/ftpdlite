@@ -41,7 +41,7 @@ wifi_ip_address = wlan.ifconfig()[0]
 server = FTPd(host=wifi_ip_address)
 server.add_account("ftpadmin:changeme")
 server.add_account("ftp:ftp")
-server.run()
+server.run(debug=True)
 ```
 _Figure 2: main.py_
 
@@ -80,9 +80,9 @@ _Figure 4: Creating multiple user accounts_
 When creating user accounts, the first account created will have read-write access. Any remaining accounts will be restricted to read-only. The account names don't matter, only the order of creation.
 
 ### Starting the server
-The `run()` method will start up the server and listen for connections.
+The `run()` method will start up the server and listen for connections. The _debug_ parameter is optional and defaults to _False_ if not specified.
 
 ```
-server.run()
+server.run(debug=True)
 ```
 _Figure 5: Starting the FTP server_
