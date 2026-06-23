@@ -137,7 +137,7 @@ class FTPdLite:
         server_name="FTPdLite (MicroPython)",
         pasv_port_range=range(49152, 49407),
     ):
-        self._debug = True
+        self._debug = False
         self._host = host
         self._port = port
         self.max_connections = 10
@@ -764,13 +764,15 @@ class FTPdLite:
                             del session
                             break
 
-    def run(self, loop=None):
+    def run(self, loop=None, debug=None):
         now = time()
         jan_1_2023 = 725846400  # mktime((2023, 1, 1, 0, 0, 0, 0, 1))
         if now < jan_1_2023:
             print("WARNING: System clock not set. File timestamps will be incorrect.")
         if loop is None:
             loop = get_event_loop()
+        if debug is not None:
+            self._debug = debug
         server = start_server(self.on_ctrl_connect, self._host, self._port, 5)
         loop.create_task(server)
         print(f"Listening on {self._host}:{self._port}")
