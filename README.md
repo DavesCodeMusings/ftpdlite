@@ -30,4 +30,4 @@ FTPdLite is a total alpha-quality product at the moment.
 * GUI clients (FileZilla, et al.) must have simultaneous connections limited to 1.
 * MicroPython lacks the `glob()` function, so no wildcard filenames or _mget_.
 * Listing (ls) only works for directories, not individual files.
-* The entire flash file system is visible from FTP, so wifi credentials are exposed.
+* The entire flash file system is visible from FTP, so credentials are exposed.
